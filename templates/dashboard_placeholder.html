@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Redirecting...{% endblock %}
+
+{% block body %}
+
+<div class="dashboard-container max-w-2xl mx-auto mt-20 p-8 bg-white rounded-xl shadow-lg" style="text-align: center;">
+<h1 class="text-3xl font-bold text-primary mb-4">Redirecting to your personalized dashboard...</h1>
+<p class="text-lg text-gray-700">Please wait while we load your tailored view.</p>
+<p class="mt-8">If you see this page for a long time, please <a href="{{ url_for('logout') }}" class="text-secondary font-semibold hover:underline">log out</a> and try again.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+
+{% block title %}Donor Dashboard{% endblock %}
+
+{% block body %}
+<!-- Main content container with white background and dark text for visibility -->
+<div class="w-full max-w-5xl mx-auto p-4 md:p-8 bg-white rounded-xl shadow-2xl text-gray-800">
+    <h2 class="text-3xl font-bold text-primary mb-6 border-b pb-2">Welcome, {{ username }} (Donor)</h2>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-primary text-white p-4 rounded-lg shadow-md">
+            <p class="text-sm opacity-90">Your Blood Type</p>
+            <p class="text-2xl font-extrabold">{{ blood_type }}</p>
+        </div>
+        <div class="bg-mid-blue text-white p-4 rounded-lg shadow-md">
+            <p class="text-sm opacity-90">Your Location</p>
+            <p class="text-xl font-bold">{{ location }}</p>
+        </div>
+        <div class="bg-secondary text-white p-4 rounded-lg shadow-md">
+            <p class="text-sm opacity-90">Requests Received</p>
+            <p class="text-2xl font-extrabold">{{ transactions|length }}</p>
+        </div>
+    </div>
+
+    <!-- Section 1: Public Blood Requests (from Recipients, Admin Approved) -->
+    <div class="p-6 rounded-xl border border-gray-200 mb-8">
+        <h3 class="text-2xl font-semibold text-primary mb-4">Urgent Public Requests</h3>
+        {% if requests %}
+            <div class="space-y-4">
+                {% for req in requests %}
+                    <div class="bg-red-50 p-4 rounded-lg shadow border-l-4 border-red-500">
+                        <p class="font-bold text-xl text-primary">{{ req.blood_type_needed }} NEEDED</p>
+                        <p class="text-sm text-gray-600">Location: {{ req.location_needed }} | Contact: {{ req.contact_info }}</p>
+                        <p class="mt-1 text-gray-700">{{ req.details }}</p>
+                        <p class="text-xs mt-2 font-semibold text-green-700">Status: <span class="font-extrabold">{{ req.status }}</span> (Contact immediately if you can help)</p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500 italic">No approved public requests currently available in your area.</p>
+        {% endif %}
+    </div>
+
+    <!-- Section 2: Direct Requests (Transactions) -->
+    <div class="p-6 rounded-xl border border-gray-200 mb-8">
+        <h3 class="text-2xl font-semibold text-mid-blue mb-4">Direct Recipient Messages</h3>
+        {% if transactions %}
+            <div class="space-y-4">
+                {% for tx in transactions %}
+                    <div class="bg-blue-50 p-4 rounded-lg shadow border-l-4 border-mid-blue">
+                        <p class="font-bold text-xl">From: {{ tx.recipient.username }} ({{ tx.blood_type_needed }})</p>
+                        <p class="text-sm text-gray-600">Needed at: {{ tx.location_needed }}</p>
+                        <p class="mt-1 text-gray-700 italic">"{{ tx.message }}"</p>
+                        <p class="text-xs mt-2 font-semibold">Status: <span class="font-extrabold text-mid-blue">{{ tx.status }}</span></p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500 italic">You have not received any direct contact requests yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- Section 3: Post Your Donation -->
+    <div class="p-6 rounded-xl border border-gray-200">
+        <h3 class="text-xl font-semibold text-secondary mb-4">Post a Successful Donation</h3>
+        <form action="{{ url_for('post_blood') }}" method="POST" class="space-y-4">
+            <textarea name="content" placeholder="Share your donation experience (e.g., 'Just donated O+ at [Blood Bank]!')" class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800" rows="2" required></textarea>
+
+            <select name="blood_bank_id" class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
+                <option value="" selected>Select where you donated (Optional)</option>
+                {% for bank in blood_banks %}
+                    <option value="{{ bank.id }}">{{ bank.name }} ({{ bank.location }})</option>
+                {% endfor %}
+            </select>
+
+            <button type="submit" class="bg-secondary text-white py-2 px-4 rounded-lg hover:bg-mid-blue transition duration-300 shadow-md">
+                Post Donation
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

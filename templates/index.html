@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaveABlood - Auth</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles to match the aesthetic (based on your home page colors) */
+        :root {
+            --color-primary: #e63946; /* Red (Blood theme) */
+            --color-secondary: #1d3557; /* Dark Blue */
+            --color-accent: #457b9d; /* Light Blue */
+            --color-text: #1d3557;
+        }
+        body {
+            font-family: "Inter", sans-serif;
+            background-color: #f1faee; /* Light background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="auth-app" class="w-full max-w-lg p-6 md:p-10 bg-white rounded-xl shadow-2xl border-t-4 border-t-[var(--color-primary)]">
+        <h2 class="text-3xl font-extrabold text-[var(--color-secondary)] mb-2 text-center">
+            SaveABlood
+        </h2>
+        <p id="app-status" class="text-xs text-center mb-6 text-gray-500">Loading authentication...</p>
+        
+        <!-- Toggle Buttons -->
+        <div class="flex mb-6 rounded-lg bg-gray-100 p-1">
+            <button id="login-tab-btn" class="flex-1 py-2 text-sm font-semibold rounded-lg transition-all" onclick="showForm('login')">
+                Login
+            </button>
+            <button id="register-tab-btn" class="flex-1 py-2 text-sm font-semibold rounded-lg transition-all" onclick="showForm('register')">
+                Register
+            </button>
+        </div>
+
+        <!-- System Message Box -->
+        <div id="message-box" class="hidden p-3 mb-4 rounded-lg text-sm font-medium" role="alert"></div>
+
+        <!-- Login Form (Default) -->
+        <form id="login-form" class="space-y-4">
+            <div>
+                <label for="login-email" class="block text-sm font-medium text-[var(--color-text)]">Email</label>
+                <input type="email" id="login-email" required class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-accent)] focus:ring focus:ring-[var(--color-accent)] focus:ring-opacity-50">
+            </div>
+            <div>
+                <label for="login-password" class="block text-sm font-medium text-[var(--color-text)]">Password</label>
+                <input type="password" id="login-password" required class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-accent)] focus:ring focus:ring-[var(--color-accent)] focus:ring-opacity-50">
+            </div>
+            <button type="submit" class="w-full py-3 px-4 bg-[var(--color-secondary)] hover:bg-[var(--color-accent)] text-white font-bold rounded-md transition duration-200">
+                Log In
+            </button>
+        </form>
+
+        <!-- Register Form -->
+        <form id="register-form" class="space-y-4 hidden">
+            <div>
+                <label for="register-name" class="block text-sm font-medium text-[var(--color-text)]">Full Name</label>
+                <input type="text" id="register-name" required class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-accent)] focus:ring focus:ring-[var(--color-accent)] focus:ring-opacity-50">
+            </div>
+            <div>
+                <label for="register-email" class="block text-sm font-medium text-[var(--color-text)]">Email</label>
+                <input type="email" id="register-email" required class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-accent)] focus:ring focus:ring-[var(--color-accent)] focus:ring-opacity-50">
+            </div>
+            <div>
+                <label for="register-password" class="block text-sm font-medium text-[var(--color-text)]">Password (min 6 characters)</label>
+                <input type="password" id="register-password" required class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-accent)] focus:ring focus:ring-[var(--color-accent)] focus:ring-opacity-50">
+            </div>
+            <div>
+                <label for="register-type" class="block text-sm font-medium text-[var(--color-text)]">User Type</label>
+                <select id="register-type" required class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-[var(--color-accent)] focus:ring focus:ring-[var(--color-accent)] focus:ring-opacity-50 bg-white">
+                    <option value="donor">Donor</option>
+                    <option value="recipient">Recipient</option>
+                </select>
+            </div>
+            <button type="submit" class="w-full py-3 px-4 bg-[var(--color-primary)] hover:bg-[var(--color-accent)] text-white font-bold rounded-md transition duration-200">
+                Register Account
+            </button>
+        </form>
+    </div>
+
+    <!-- Firebase Script Block -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // IMPORTANT: Global variables are provided by the Canvas environment.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let auth, db;
+        
+        const messageBox = document.getElementById('message-box');
+        const appStatus = document.getElementById('app-status');
+
+        function displayMessage(message, isError = false) {
+            messageBox.textContent = message;
+            messageBox.className = 'p-3 mb-4 rounded-lg text-sm font-medium ' + (isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700');
+            messageBox.style.display = 'block';
+            setTimeout(() => {
+                messageBox.style.display = 'none';
+            }, 5000);
+        }
+
+        async function initializeFirebase() {
+            try {
+                // Initialize Firebase app
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+                setLogLevel('error'); // Only log errors to console
+
+                appStatus.textContent = 'Ready.';
+
+                // Sign in using the initial custom token or anonymously
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // This listener ensures that if a user is already logged in, 
+                // they are immediately redirected.
+                onAuthStateChanged(auth, (user) => {
+                    if (user && user.email) {
+                        // User is signed in with an email account, redirect to dashboard
+                        console.log("User already logged in with email:", user.email);
+                        window.location.href = '/dashboard';
+                    } else if (user && !user.email) {
+                         // Anonymous user, keep on auth page
+                         console.log("Signed in anonymously. Awaiting login/register.");
+                    } else {
+                        console.log("No user signed in.");
+                    }
+                });
+
+            } catch (error) {
+                console.error("Firebase Initialization Error:", error);
+                appStatus.textContent = 'Error initializing Firebase. Check console.';
+            }
+        }
+
+        /**
+         * Saves user profile data to Firestore after successful registration.
+         */
+        async function saveUserProfile(userId, profileData) {
+            try {
+                // Private user data path: /artifacts/{appId}/users/{userId}/user_profile/details
+                const userDocRef = doc(db, 
+                    `artifacts/${appId}/users/${userId}/user_profile`, 
+                    'details'
+                );
+                
+                await setDoc(userDocRef, profileData);
+                console.log("User profile saved successfully.");
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                displayMessage("Account created, but failed to save profile data. Please contact support.", true);
+            }
+        }
+
+        // --- Authentication Handlers ---
+
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('register-name').value;
+            const email = document.getElementById('register-email').value;
+            const password = document.getElementById('register-password').value;
+            const type = document.getElementById('register-type').value;
+
+            try {
+                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+                const user = userCredential.user;
+
+                // 2. Save additional profile data to Firestore
+                await saveUserProfile(user.uid, {
+                    name: name,
+                    email: email,
+                    type: type,
+                    registeredAt: new Date().toISOString()
+                });
+
+                // 3. Redirect on success
+                displayMessage("Registration successful! Redirecting to dashboard...", false);
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 1000);
+
+            } catch (error) {
+                console.error("Registration Error:", error);
+                let errorMessage = "Registration failed. Please try again.";
+                
+                switch (error.code) {
+                    case 'auth/email-already-in-use':
+                        errorMessage = "This email address is already in use. Please log in.";
+                        break;
+                    case 'auth/invalid-email':
+                        errorMessage = "The email address is invalid.";
+                        break;
+                    case 'auth/weak-password':
+                        errorMessage = "Password should be at least 6 characters.";
+                        break;
+                    default:
+                        errorMessage = `Registration Error: ${error.message}`;
+                }
+                displayMessage(errorMessage, true);
+            }
+        });
+
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+
+                // Redirect is handled by the onAuthStateChanged listener, 
+                // but we add a quick redirect here just in case.
+                displayMessage("Login successful! Redirecting to dashboard...", false);
+                setTimeout(() => {
+                    window.location.href = '/dashboard';
+                }, 500);
+
+
+            } catch (error) {
+                console.error("Login Error:", error);
+                let errorMessage = "Login failed. Please check your email and password.";
+
+                if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+                     errorMessage = "Invalid email or password. Please try again.";
+                } else {
+                    errorMessage = `Login Error: ${error.message}`;
+                }
+                displayMessage(errorMessage, true);
+            }
+        });
+
+
+        // --- UI Logic ---
+
+        const loginForm = document.getElementById('login-form');
+        const registerForm = document.getElementById('register-form');
+        const loginBtn = document.getElementById('login-tab-btn');
+        const registerBtn = document.getElementById('register-tab-btn');
+
+        window.showForm = function(formType) {
+            if (formType === 'login') {
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+                loginBtn.classList.add('bg-white', 'shadow-sm', 'text-[var(--color-secondary)]');
+                loginBtn.classList.remove('text-gray-600');
+                registerBtn.classList.remove('bg-white', 'shadow-sm', 'text-[var(--color-secondary)]');
+                registerBtn.classList.add('text-gray-600');
+            } else if (formType === 'register') {
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+                registerBtn.classList.add('bg-white', 'shadow-sm', 'text-[var(--color-secondary)]');
+                registerBtn.classList.remove('text-gray-600');
+                loginBtn.classList.remove('bg-white', 'shadow-sm', 'text-[var(--color-secondary)]');
+                loginBtn.classList.add('text-gray-600');
+            }
+            messageBox.style.display = 'none'; // Clear messages on tab switch
+        }
+
+        // Initialize App and set default form view
+        initializeFirebase();
+        showForm('login');
+
+    </script>
+</body>
+</html>

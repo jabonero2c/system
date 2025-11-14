@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="max-w-4xl mx-auto p-4">
+    <header class="flex justify-between items-center border-b pb-4 mb-6">
+        <h1 class="text-2xl font-bold text-secondary">Search for Donors</h1>
+        <a href="{{ url_for('dashboard') }}" class="py-2 px-4 bg-primary text-white rounded-lg hover:bg-red-600 transition">Back to Dashboard</a>
+    </header>
+
+    <!-- Search Card -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+        <h2 class="text-xl font-semibold mb-4 text-secondary">Find Matching Donors</h2>
+        <form action="{{ url_for('search') }}" method="POST" class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 items-end">
+            <div class="flex-grow w-full">
+                <label for="blood_type" class="block text-sm font-medium text-gray-700 mb-1">Blood Type</label>
+                <select name="blood_type" id="blood_type" required class="w-full p-2 border rounded-lg">
+                    <option value="" disabled {% if not search_params %}selected{% endif %}>Select Type</option>
+                    <option value="O+" {% if search_params and search_params.blood_type == 'O+' %}selected{% endif %}>O+</option>
+                    <option value="O-" {% if search_params and search_params.blood_type == 'O-' %}selected{% endif %}>O-</option>
+                    <option value="A+" {% if search_params and search_params.blood_type == 'A+' %}selected{% endif %}>A+</option>
+                    <option value="A-" {% if search_params and search_params.blood_type == 'A-' %}selected{% endif %}>A-</option>
+                    <option value="B+" {% if search_params and search_params.blood_type == 'B+' %}selected{% endif %}>B+</option>
+                    <option value="B-" {% if search_params and search_params.blood_type == 'B-' %}selected{% endif %}>B-</option>
+                    <option value="AB+" {% if search_params and search_params.blood_type == 'AB+' %}selected{% endif %}>AB+</option>
+                    <option value="AB-" {% if search_params and search_params.blood_type == 'AB-' %}selected{% endif %}>AB-</option>
+                </select>
+            </div>
+
+            <div class="flex-grow w-full">
+                <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Location Keyword</label>
+                <input type="text" name="location" id="location" placeholder="e.g., Lahug or Mandaue" required
+                       value="{{ search_params.location if search_params else '' }}" class="w-full p-2 border rounded-lg">
+            </div>
+
+            <div class="w-full sm:w-auto">
+                <input type="submit" value="Search" class="w-full py-2 bg-secondary text-white rounded-lg hover:bg-blue-700 cursor-pointer">
+            </div>
+        </form>
+    </div>
+
+    <!-- Results Card -->
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold mb-4 text-primary">Search Results</h2>
+
+        {% if donors %}
+            <div class="space-y-3">
+                {% for donor in donors %}
+                    {% if current_user and donor.id != current_user.id %}
+                    <div class="p-4 border rounded-lg bg-gray-50 flex justify-between items-center">
+                        <div class="donor-details">
+                            <p class="text-lg font-semibold">{{ donor.username }}</p>
+                            <p class="text-sm text-gray-600">
+                                Blood Type: <strong class="text-primary">{{ donor.blood_type }}</strong> |
+                                Location: {{ donor.location }}
+                            </p>
+                        </div>
+
+                        {% if current_user_role == 'recipient' %}
+                            <button type="button" class="py-1 px-3 bg-secondary text-white rounded-lg text-sm hover:bg-blue-700"
+                                onclick="showRequestModal(
+                                    '{{ donor.id }}',
+                                    '{{ donor.username }}',
+                                    '{{ donor.blood_type }}'
+                                )">
+                                Request Contact
+                            </button>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% elif search_params %}
+            <p class="text-gray-500 italic">No donors found matching the criteria.</p>
+        {% else %}
+            <p class="text-gray-500 italic">Enter search criteria above to find matching donors.</p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Hidden Modal for Message/Transaction Request (Copied from recipient_dashboard.html) -->
+<div id="requestModalOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-md">
+        <h3 class="text-xl font-bold mb-4 text-primary">Send Urgent Request to <span id="modalDonorName" class="text-secondary">Donor</span></h3>
+        <p class="mb-4 text-gray-600">You are requesting contact with this donor (Blood Type: <strong id="modalDonorType"></strong>).</p>
+
+        <form id="modalRequestForm" action="{{ url_for('send_transaction') }}" method="POST">
+            <input type="hidden" name="donor_id" id="modalDonorId">
+
+            {% if current_user %}
+            <input type="hidden" name="blood_type_needed" value="{{ current_user.blood_type }}">
+            <input type="hidden" name="location_needed" value="{{ current_user.location }}">
+            {% endif %}
+
+            <textarea name="message" id="modalMessage" rows="5"
+                placeholder="Enter your urgent request and details (e.g., 'I need B+ urgently at Cebu Doctors'. Please call me at 0917...')" required
+                class="w-full p-2 mb-4 border rounded-lg"></textarea>
+
+            <div class="flex justify-end space-x-2">
+                <button type="button" class="py-2 px-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition" onclick="closeRequestModal()">Cancel</button>
+                <input type="submit" value="Send Request Now" class="py-2 px-4 bg-primary text-white rounded-lg hover:bg-red-600 cursor-pointer">
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function showRequestModal(donorId, donorName, donorType) {
+        document.getElementById('modalDonorId').value = donorId;
+        document.getElementById('modalDonorName').textContent = donorName;
+        document.getElementById('modalDonorType').textContent = donorType;
+        document.getElementById('modalMessage').value = '';
+        document.getElementById('requestModalOverlay').classList.remove('hidden');
+        document.getElementById('requestModalOverlay').classList.add('flex');
+    }
+
+    function closeRequestModal() {
+        document.getElementById('requestModalOverlay').classList.add('hidden');
+        document.getElementById('requestModalOverlay').classList.remove('flex');
+    }
+
+    document.getElementById('requestModalOverlay').addEventListener('click', function(e) {
+        if (e.target.id === 'requestModalOverlay') {
+            closeRequestModal();
+        }
+    });
+</script>
+{% endblock %}

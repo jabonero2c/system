@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SaveABlood - Login/Register</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        /* Custom styles added to fulfill the request and enhance aesthetics */
+        :root {
+            --primary-red: #e63946;
+            --secondary-blue: #1d3557;
+            --light-bg: #f1faee; /* Lightest color from the Home Page gradient */
+            --light-pink: #f8d7da; /* Middle color from the Home Page gradient */
+        }
+
+        /* 1. Set background to the full gradient from the Home Page hero section */
+        body {
+            /* Using the full gradient: red -> light pink -> lightest white */
+            background: linear-gradient(to right, var(--primary-red), var(--light-pink), var(--light-bg));
+            font-family: "Poppins", Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 50px;
+            margin: 0;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: var(--secondary-blue); /* Dark text color for readability over the gradient */
+            margin-bottom: 40px;
+            font-size: 2em;
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5); /* Helps text stand out */
+        }
+
+        form {
+            background-color: white; /* Forms are white for high readability */
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2); /* Stronger shadow over gradient */
+            margin-bottom: 30px;
+            width: 90%;
+            max-width: 400px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        form:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Different border colors for visual grouping */
+        form[action*="login"] {
+            border-top: 5px solid var(--secondary-blue);
+        }
+        #register {
+            border-top: 5px solid var(--primary-red);
+        }
+
+        form h2 {
+            color: var(--secondary-blue);
+            margin-top: 0;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        input[type="text"], input[type="password"], select {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus, input[type="password"]:focus, select:focus {
+            border-color: var(--primary-red);
+            outline: none;
+        }
+
+        /* Styling for Donor/Recipient selector background */
+        select[name="role"] {
+            background-color: var(--light-bg);
+            font-weight: 500;
+        }
+
+        input[type="submit"] {
+            background-color: var(--primary-red);
+            color: white;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+
+        input[type="submit"]:hover {
+            background-color: var(--secondary-blue);
+        }
+    </style>
+</head>
+<body>
+    <h1>Welcome to SaveABlood</h1>
+
+    <form action="{{ url_for('login') }}" method="POST">
+        <h2>Login</h2>
+        <input type="text" name="username" placeholder="Username" required>
+        <input type="password" name="password" placeholder="Password" required>
+        <input type="submit" value="Login">
+    </form>
+
+    <form id="register" action="{{ url_for('register') }}" method="POST">
+        <h2>Register</h2>
+        <input type="text" name="new_username" placeholder="Username" required>
+        <input type="password" name="new_password" placeholder="Password" required>
+        <input type="text" name="blood_type" placeholder="Blood Type" required>
+        <input type="text" name="location" placeholder="Location" required>
+        <select name="role">
+            <option value="donor">Donor</option>
+            <option value="recipient">Recipient</option>
+        </select>
+        <input type="submit" value="Register">
+    </form>
+
+    {% if error %}
+        <p style="color:var(--secondary-blue); background-color: white; padding: 8px; border-radius: 6px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
+            {{ error }}
+        </p>
+    {% endif %}
+</body>
+</html>

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Recipient Dashboard{% endblock %}
+
+{% block body %}
+<!-- Main content container with white background and dark text for visibility -->
+<div class="w-full max-w-5xl mx-auto p-4 md:p-8 bg-white rounded-xl shadow-2xl text-gray-800">
+    <h2 class="text-3xl font-bold text-primary mb-6 border-b pb-2">Welcome, {{ username }} (Recipient)</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div class="bg-primary text-white p-4 rounded-lg shadow-md">
+            <p class="text-sm opacity-90">Your Blood Type</p>
+            <p class="text-2xl font-extrabold">{{ blood_type }}</p>
+        </div>
+        <div class="bg-mid-blue text-white p-4 rounded-lg shadow-md">
+            <p class="text-sm opacity-90">Your Location</p>
+            <p class="text-xl font-bold">{{ location }}</p>
+        </div>
+        <div class="bg-secondary text-white p-4 rounded-lg shadow-md">
+            <p class="text-sm opacity-90">Requests Posted</p>
+            <p class="text-2xl font-extrabold">{{ requests|length }}</p>
+        </div>
+    </div>
+
+    <!-- Section 1: Search for Donors (Text visibility fixed by parent div) -->
+    <div class="p-6 rounded-xl border border-gray-200 mb-8">
+        <h3 class="text-xl font-semibold text-primary mb-4">Find Donors Near You</h3>
+        <form action="{{ url_for('search_donors') }}" method="POST" class="flex flex-col md:flex-row gap-4">
+            <!-- Explicitly setting text-gray-800 on form elements for consistency -->
+            <select name="search_blood_type" required class="flex-1 p-3 border rounded-md focus:ring-primary focus:border-primary text-gray-800">
+                <option value="" disabled selected>Blood Type to Search For</option>
+                <option value="A+">A+</option>
+                <option value="A-">A-</option>
+                <option value="B+">B+</option>
+                <option value="B-">B-</option>
+                <option value="AB+">AB+</option>
+                <option value="AB-">AB-</option>
+                <option value="O+">O+</option>
+                <option value="O-">O-</option>
+            </select>
+            <input type="text" name="search_location" placeholder="Location (e.g., Cebu)" required class="flex-1 p-3 border rounded-md focus:ring-primary focus:border-primary text-gray-800">
+            <button type="submit" class="bg-primary text-white py-2 px-4 rounded-lg hover:bg-mid-blue transition duration-300 shadow-md">
+                Search Donors
+            </button>
+        </form>
+    </div>
+
+    <!-- Section 2: Post Public Request (Text visibility fixed by parent div) -->
+    <div class="p-6 rounded-xl border border-gray-200 mb-8">
+        <h3 class="text-xl font-semibold text-secondary mb-4">Post a Public Request for Admin Approval</h3>
+        <form action="{{ url_for('post_request') }}" method="POST" class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <select name="blood_type_needed" required class="p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
+                    <option value="" disabled selected>Blood Type Needed</option>
+                    <option value="A+">A+</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B-">B-</option>
+                    <option value="AB+">AB+</option>
+                    <option value="AB-">AB-</option>
+                    <option value="O+">O+</option>
+                    <option value="O-">O-</option>
+                </select>
+                <!-- UPDATED: Replaced text input with a select dropdown for Cebu Hospitals -->
+                <select name="location_needed" required class="p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
+                    <option value="" disabled selected>Hospital Needed (Cebu)</option>
+                    {% for hospital in cebu_hospitals %}
+                        <option value="{{ hospital }}">{{ hospital }}</option>
+                    {% endfor %}
+                </select>
+                <!-- END UPDATED -->
+            </div>
+            <input type="text" name="contact_info" placeholder="Contact Phone or Email" required class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
+            <textarea name="details" placeholder="Brief details about the emergency and patient condition." class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800" rows="3" required></textarea>
+
+            <button type="submit" class="bg-secondary text-white py-2 px-4 rounded-lg hover:bg-mid-blue transition duration-300 shadow-md">
+                Submit Request
+            </button>
+        </form>
+    </div>
+
+    <!-- Section 3: Your Posted Requests (Text visibility fixed by parent div) -->
+    <div>
+        <h3 class="text-2xl font-semibold text-mid-blue mb-4 border-b pb-2">Your Submitted Public Requests</h3>
+        {% if requests %}
+            <div class="space-y-4">
+                {% for req in requests %}
+                    <div class="bg-gray-50 p-4 rounded-lg shadow border-l-4
+                        {% if req.status == 'Approved' %}border-green-500{% elif req.status == 'Pending' %}border-yellow-500{% else %}border-red-500{% endif %}">
+                        <p class="font-bold text-xl">{{ req.blood_type_needed }}</p>
+                        <p class="text-sm text-gray-600">Location: {{ req.location_needed }} | Contact: {{ req.contact_info }}</p>
+                        <p class="mt-1 text-gray-700">{{ req.details }}</p>
+                        <p class="text-xs mt-2 font-semibold">Status: <span class="font-extrabold">{{ req.status }}</span> (Waiting for Admin approval)</p>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-gray-500 italic">You have not posted any public requests yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

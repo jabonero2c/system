@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="flex items-center justify-center min-h-screen p-4">
+    <div class="w-full max-w-6xl mx-auto bg-white rounded-xl shadow-2xl overflow-hidden md:grid md:grid-cols-2">
+
+        <div class="hidden md:flex flex-col justify-center items-center p-10 text-white bg-primary rounded-l-xl">
+            <h1 class="text-5xl font-extrabold mb-4 text-center">Access SaveABlood</h1>
+            <p class="text-xl text-center mb-6">Your hub for urgent connection and life-saving donations.</p>
+
+
+
+            <p class="mt-8 text-sm italic text-red-100">"Connecting communities, one life at a time."</p>
+        </div>
+
+        <div class="p-8 md:p-12">
+            <h2 class="text-3xl font-bold text-center mb-8 text-gray-800">User Access</h2>
+
+            <div class="mb-8 p-6 border border-gray-200 rounded-xl bg-gray-50 shadow-inner">
+                <h3 class="text-2xl font-semibold mb-4 text-primary border-b pb-2">Existing User Login</h3>
+                <form action="{{ url_for('login') }}" method="POST">
+                    <input type="text" name="username" placeholder="Username" required
+                           class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                    <input type="password" name="password" placeholder="Password" required
+                           class="w-full p-3 mb-6 border border-gray-300 rounded-lg focus:ring-primary focus:border-primary">
+                    <button type="submit" class="w-full py-3 bg-primary text-white font-semibold rounded-lg hover:bg-red-600 transition shadow-md">
+                        Login to Dashboard
+                    </button>
+                </form>
+            </div>
+
+            <div class="p-6 border border-gray-300 rounded-xl bg-white shadow-lg">
+                <h3 class="text-2xl font-semibold mb-4 text-secondary border-b pb-2">New User Registration *</h3>
+                <form action="{{ url_for('register') }}" method="POST">
+                    <input type="text" name="new_username" placeholder="Choose Username" required
+                           class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-secondary focus:border-secondary">
+                    <input type="password" name="new_password" placeholder="Choose Password" required
+                           class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-secondary focus:border-secondary">
+
+                    <select name="blood_type" required
+                            class="w-full p-3 mb-4 border border-gray-300 rounded-lg bg-white focus:ring-secondary focus:border-secondary">
+                        <option value="" disabled selected>Select Your Blood Type *</option>
+                        <option value="O+">O RhD positive (O+)</option>
+                        <option value="O-">O RhD negative (O-)</option>
+                        <option value="A+">A RhD positive (A+)</option>
+                        <option value="A-">A RhD negative (A-)</option>
+                        <option value="B+">B RhD positive (B+)</option>
+                        <option value="B-">B RhD negative (B-)</option>
+                        <option value="AB+">AB RhD positive (AB+)</option>
+                        <option value="AB-">AB RhD negative (AB-)</option>
+                    </select>
+
+                    <input type="text" name="location" placeholder="Your Location (e.g., Cebu City - Lahug) *" required
+                           class="w-full p-3 mb-4 border border-gray-300 rounded-lg focus:ring-secondary focus:border-secondary">
+
+                    <select name="role" required
+                            class="w-full p-3 mb-6 border border-gray-300 rounded-lg bg-white focus:ring-secondary focus:border-secondary">
+                        <option value="" disabled selected>I am registering as a... *</option>
+                        <option value="donor">Donor (I can give blood)</option>
+                        <option value="recipient">Recipient (I may need blood)</option>
+                        <option value="admin">Admin (For internal use)</option>
+                    </select>
+
+                    <button type="submit" class="w-full py-3 bg-secondary text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-md">
+                        Create Account
+                    </button>
+                </form>
+            </div>
+            
+            <p class="mt-4 text-center text-sm text-gray-500">
+                <a href="{{ url_for('index') }}" class="text-primary hover:text-red-700 transition">← Back to Homepage</a>
+            </p>
+        </div>
+
+    </div>
+</div>
+{% endblock %}

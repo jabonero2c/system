@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block body %}
+<div class="max-w-4xl mx-auto p-4 bg-white shadow-lg rounded-lg">
+    <header class="flex justify-between items-center border-b pb-4 mb-6">
+        <h1 class="text-2xl font-bold text-primary">Admin Dashboard: {{ username }}</h1>
+        <a href="{{ url_for('logout') }}" class="py-2 px-4 bg-secondary text-white rounded-lg hover:bg-blue-700 transition">Logout</a>
+    </header>
+
+    <div class="bg-gray-50 p-6 rounded-lg">
+        <h2 class="text-xl font-semibold mb-4 text-secondary border-b pb-2">Pending Public Blood Requests (Awaiting Approval)</h2>
+
+        {% if pending_requests %}
+            <div class="space-y-4">
+                {% for request in pending_requests %}
+                    <div class="p-4 border border-gray-300 rounded-lg flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white">
+                        <div class="mb-3 sm:mb-0">
+                            <p class="font-bold">Request ID: #{{ request.id }}</p>
+                            <p>Requester: {{ request.requester.username }} (Type: {{ request.requester.blood_type }})</p>
+                            <p class="text-primary font-semibold">Needed: {{ request.blood_type_needed }} at {{ request.location_needed }}</p>
+                            <p class="text-orange-500 font-medium">Status: {{ request.status }}</p>
+                        </div>
+
+                        <div class="flex space-x-2">
+                            <form action="{{ url_for('approve_request', request_id=request.id, action='approve') }}" method="POST">
+                                <button type="submit" class="py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition">
+                                    Approve
+                                </button>
+                            </form>
+
+                            <form action="{{ url_for('approve_request', request_id=request.id, action='decline') }}" method="POST">
+                                <button type="submit" class="py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600 transition">
+                                    Decline
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="text-center p-8 bg-gray-200 rounded-lg text-gray-600 italic">
+                <p>All clear! There are no pending public blood requests requiring approval.</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
