@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipient Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7f7f7; }
+        .card { @apply bg-white p-6 rounded-xl shadow-lg border border-gray-100; }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen bg-gray-50">
+        <!-- Header -->
+        <header class="bg-blue-700 text-white p-4 shadow-md">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-3xl font-bold">Recipient Dashboard</h1>
+                <div class="flex items-center space-x-4">
+                    <span class="font-semibold">{{ user.username }} ({{ user.blood_type }})</span>
+                    <a href="{{ url_for('logout') }}" class="bg-white text-blue-700 font-medium py-1 px-4 rounded-lg hover:bg-blue-100 transition">Logout</a>
+                </div>
+            </div>
+        </header>
+
+        <!-- Flash Messages -->
+        <div class="container mx-auto mt-4 px-4">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="mb-4 space-y-2">
+                        {% for category, message in messages %}
+                            <div class="p-3 rounded-lg text-sm font-medium {% if category == 'error' %}bg-red-100 text-red-700{% elif category == 'success' %}bg-green-100 text-green-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <!-- Main Content Grid -->
+        <main class="container mx-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            
+            <!-- Column 1: Search & Direct Contact -->
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Search for Suggested Donors -->
+                <div class="card bg-blue-50 border-blue-200">
+                    <h2 class="text-2xl font-bold text-blue-700 mb-4">Find Suggested Donors</h2>
+                    <form action="{{ url_for('search') }}" method="POST" class="space-y-4">
+                        <div>
+                            <label for="blood_type" class="block text-sm font-medium text-gray-700">Blood Type Needed</label>
+                            <select id="blood_type" name="blood_type" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                <option value="O+">O+</option><option value="O-">O-</option>
+                                <option value="A+">A+</option><option value="A-">A-</option>
+                                <option value="B+">B+</option><option value="B-">B-</option>
+                                <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="location" class="block text-sm font-medium text-gray-700">Location (e.g., Cebu City)</label>
+                            <input type="text" id="location" name="location" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500" value="{{ search_params.location if search_params else '' }}">
+                        </div>
+                        <button type="submit" class="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition">
+                            Search Donors
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Recipient's Transactions (Direct Requests Sent) -->
+                <div class="card">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Your Direct Requests Sent</h2>
+                    {% if my_transactions %}
+                        <div class="space-y-3">
+                            {% for tx in my_transactions %}
+                                <div class="p-3 bg-gray-50 rounded-lg border-l-4 border-gray-400">
+                                    <p class="font-semibold text-gray-900">To: {{ tx.donor_username }}</p>
+                                    <p class="text-sm text-gray-600">Needs {{ tx.blood_type_needed }} | Status: <span class="font-bold text-yellow-600">{{ tx.status }}</span></p>
+                                    <p class="text-xs text-gray-500 italic mt-1">{{ tx.timestamp.split(' ')[0] }}</p>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-gray-500 text-sm">You haven't sent any direct contact requests yet.</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Column 2: Search Results -->
+            <div class="lg:col-span-2 space-y-6">
+                
+                <!-- Donor Search Results -->
+                <div class="card">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Donor Search Results (Suggested Donors)</h2>
+                    {% if donors %}
+                        <div class="space-y-4">
+                            {% for donor in donors %}
+                                <div class="p-4 bg-green-50 rounded-lg shadow-md border-l-4 border-green-500">
+                                    <p class="font-bold text-xl text-green-700">{{ donor.username }}</p>
+                                    <p class="text-sm text-gray-600">Blood Type: <span class="font-semibold text-red-600">{{ donor.blood_type }}</span> | Location: {{ donor.location }}</p>
+                                    
+                                    <!-- Contact Form (Direct Request) -->
+                                    <form action="{{ url_for('send_transaction') }}" method="POST" class="mt-3 space-y-2">
+                                        <input type="hidden" name="donor_id" value="{{ donor.id }}">
+                                        <input type="hidden" name="blood_type_needed" value="{{ search_params.blood_type }}">
+                                        <input type="hidden" name="location_needed" value="{{ search_params.location }}">
+                                        <textarea name="message" rows="2" placeholder="Send a direct request message (e.g., 'Please help, urgently need {{ search_params.blood_type }} at {{ search_params.location }}')" required class="w-full p-2 border border-gray-300 rounded-lg text-sm focus:ring-red-500 focus:border-red-500"></textarea>
+                                        <button type="submit" class="bg-red-600 text-white text-sm py-2 px-4 rounded-md hover:bg-red-700 transition">
+                                            Request Donation
+                                        </button>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% elif search_params %}
+                         <p class="text-gray-500">No donors found matching the criteria: Type {{ search_params.blood_type }}, Location '{{ search_params.location }}'.</p>
+                    {% else %}
+                        <p class="text-gray-500">Use the form on the left to search for donors.</p>
+                    {% endif %}
+                </div>
+                
+                <!-- Submit New Public Request -->
+                <div class="card">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Submit New Public Request (Admin Approval Required)</h2>
+                    <form action="{{ url_for('submit_request') }}" method="POST" class="space-y-4">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label for="req_blood_type" class="block text-sm font-medium text-gray-700">Blood Type</label>
+                                <select id="req_blood_type" name="blood_type_needed" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg">
+                                    <option value="O+">O+</option><option value="O-">O-</option>
+                                    <option value="A+">A+</option><option value="A-">A-</option>
+                                    <option value="B+">B+</option><option value="B-">B-</option>
+                                    <option value="AB+">AB+</option><option value="AB-">AB-</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="req_location" class="block text-sm font-medium text-gray-700">Hospital/Location (Cebu)</label>
+                                <select id="req_location" name="location_needed" required class="mt-1 block w-full p-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="" disabled selected>-- Select a Hospital --</option>
+                                    <option value="Vicente Sotto Memorial Medical Center">Vicente Sotto Memorial Medical Center (VSMMC)</option>
+                                    <option value="Cebu Doctors' University Hospital">Cebu Doctors' University Hospital (CDUH)</option>
+                                    <option value="Chong Hua Hospital - Fuente">Chong Hua Hospital - Fuente</option>
+                                    <option value="Perpetual Succour Hospital">Perpetual Succour Hospital</option>
+                                    <option value="Cebu Velez General Hospital">Cebu Velez General Hospital</option>
+                                    <option value="Mactan Doctors' Hospital">Mactan Doctors' Hospital (Lapu-Lapu)</option>
+                                    <option value="SWU Phinma Medical Center">SWU Phinma Medical Center</option>
+                                    <option value="ARC Hospital">ARC Hospital (Liloan)</option>
+                                    <option value="Other / Specify in Details">Other / Specify in Details</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="contact_info" class="block text-sm font-medium text-gray-700">Your Contact Info</label>
+                            <input type="text" id="contact_info" name="contact_info" required placeholder="Phone Number or Email" class="mt-1 block w-full p-3 border border-gray-300 rounded-lg">
+                        </div>
+                        <div>
+                            <label for="details" class="block text-sm font-medium text-gray-700">Details (Why is the blood needed?)</label>
+                            <textarea id="details" name="details" rows="2" required class="w-full p-3 border border-gray-300 rounded-lg"></textarea>
+                        </div>
+                        <button type="submit" class="w-full bg-yellow-600 text-white py-3 rounded-lg font-semibold hover:bg-yellow-700 transition">
+                            Submit for Admin Approval
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Recipient's Public Requests Status -->
+                <div class="card">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Your Public Requests Status</h2>
+                    {% if my_requests %}
+                        <div class="space-y-3">
+                            {% for req in my_requests %}
+                                <div class="p-3 bg-gray-50 rounded-lg border-l-4 
+                                    {% if req.status == 'Pending' %}border-yellow-500
+                                    {% elif req.status == 'Approved' %}border-blue-500
+                                    {% elif req.status == 'Matched' %}border-green-500
+                                    {% else %}border-red-500{% endif %}">
+                                    <p class="font-semibold text-gray-900">Need: {{ req.blood_type_needed }} at {{ req.location_needed }}</p>
+                                    <p class="text-sm text-gray-600">
+                                        Status: <span class="font-bold">
+                                            {{ req.status }}
+                                            {% if req.status == 'Matched' %}(Donor: {{ req.donor_username }}){% endif %}
+                                        </span>
+                                    </p>
+                                    {% if req.status == 'Matched' %}
+                                    <form action="#" method="POST" class="mt-2">
+                                        <button type="submit" formaction="{{ url_for('complete_request', request_id=req.id) }}" class="bg-green-700 text-white text-xs py-1 px-3 rounded-md hover:bg-green-800 transition">Mark as Completed</button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-gray-500 text-sm">You have no active public blood requests.</p>
+                    {% endif %}
+                </div>
+
+            </div>
+        </main>
+    </div>
+</body>
+</html>

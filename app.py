@@ -1,369 +1,541 @@
-from flask import Flask, render_template, request, redirect, url_for, session, abort
+import sqlite3
+import secrets
+from flask import Flask, render_template, request, redirect, url_for, session, flash, g
+from datetime import datetime
+import os
 
-# --- Application Setup ---
+# --- Configuration and Initialization ---
 app = Flask(__name__)
-# IMPORTANT: Replace this with a secure, long, random key in a real application
-app.secret_key = 'super_secret_blood_key_12345'
-
-# --- In-Memory Database Simulation ---
-# Global counters for IDs
-next_user_id = 1
-next_request_id = 1
-next_post_id = 1
-next_tx_id = 1
-next_bank_id = 1
-
-# Database tables
-USERS = {}
-REQUESTS = {}  # Public requests (Recipient submitted, Admin approved)
-POSTS = {}  # Donor donation posts
-TRANSACTIONS = {}  # Direct requests (Recipient to Donor)
-BLOOD_BANKS = {}
-
-# Initial Data Load (Simulating pre-existing data)
-BLOOD_BANKS[1] = {'id': 1, 'name': 'Cebu City Blood Center', 'location': 'Cebu'}
-BLOOD_BANKS[2] = {'id': 2, 'name': 'Philippine Red Cross', 'location': 'Manila'}
-next_bank_id = 3
-
-# NEW: List of Cebu Hospitals for Recipient requests
-CEBU_HOSPITALS = [
-    "Cebu City Medical Center (CCMC)",
-    "Vicente Sotto Memorial Medical Center (VSMMC)",
-    "Chong Hua Hospital",
-    "Perpetual Succour Hospital",
-    "Cebu Velez General Hospital",
-    "Cebu Doctors' University Hospital (CDUH)",
-    "Minglanilla District Hospital",
-    "Lapu-Lapu City Hospital"
-]
+# Setting the secret key is essential for sessions and flash messages
+app.secret_key = secrets.token_hex(24)
+# Ensure the instance directory exists for the database
+if not os.path.exists('instance'):
+    os.makedirs('instance')
+DATABASE = 'instance/savebloodon.db'
 
 
-# Helper functions for database access
+# --- Database Setup and Helpers ---
+
+def get_db():
+    """Connects to the specific database."""
+    db = getattr(g, '_database', None)
+    if db is None:
+        db = g._database = sqlite3.connect(DATABASE)
+        # Configure to return row objects that behave like dicts
+        db.row_factory = sqlite3.Row
+    return db
+
+
+@app.teardown_appcontext
+def close_connection(exception):
+    """Closes the database connection at the end of the request."""
+    db = getattr(g, '_database', None)
+    if db is not None:
+        db.close()
+
+
+def query_db(query, args=(), one=False):
+    """Helper function to query the database."""
+    cur = get_db().execute(query, args)
+    rv = cur.fetchall()
+    cur.close()
+    return (rv[0] if rv else None) if one else rv
+
+
+def execute_db(query, args=()):
+    """Helper function to execute changes (INSERT, UPDATE, DELETE)."""
+    db = get_db()
+    db.execute(query, args)
+    db.commit()
+
+
+def add_mock_blood_bank():
+    """Inserts a mock blood bank if none exist."""
+    count = query_db('SELECT COUNT(*) FROM blood_banks', one=True)['COUNT(*)']
+    if count == 0:
+        execute_db(
+            "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
+            ('Philippine Red Cross - Cebu Chapter', 'Cebu City')
+        )
+        execute_db(
+            "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
+            ('Perpetual Succour Hospital Blood Bank', 'Lahug, Cebu')
+        )
+        # --- NEW CEBU HOSPITALS/BLOOD BANKS ---
+        execute_db(
+            "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
+            ('Cebu Doctors\' University Hospital', 'Cebu City')
+        )
+        execute_db(
+            "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
+            ('Chong Hua Hospital Blood Center', 'Cebu City')
+        )
+        execute_db(
+            "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
+            ('Vicente Sotto Memorial Medical Center', 'Cebu City')
+        )
+        # --- END NEW CEBU HOSPITALS/BLOOD BANKS ---
+
+
+# --- Automatic Database Initialization ---
+
+def init_db_on_startup():
+    """Creates tables if they do not exist and inserts initial mock data."""
+    db = get_db()
+    cursor = db.cursor()
+
+    # Create Tables
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            blood_type TEXT NOT NULL,
+            location TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('donor', 'recipient', 'admin'))
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS blood_banks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            location TEXT NOT NULL
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS requests (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requester_id INTEGER NOT NULL,
+            donor_id INTEGER,
+            blood_type_needed TEXT NOT NULL,
+            location_needed TEXT NOT NULL,
+            contact_info TEXT,
+            details TEXT,
+            status TEXT NOT NULL CHECK (status IN ('Pending', 'Approved', 'Declined', 'Matched', 'Completed', 'Cancelled')),
+            FOREIGN KEY (requester_id) REFERENCES users (id),
+            FOREIGN KEY (donor_id) REFERENCES users (id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS transactions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            requester_id INTEGER NOT NULL,
+            donor_id INTEGER NOT NULL,
+            blood_type_needed TEXT NOT NULL,
+            location_needed TEXT NOT NULL,
+            message TEXT NOT NULL,
+            timestamp DATETIME NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('Pending', 'Completed', 'Cancelled')),
+            FOREIGN KEY (requester_id) REFERENCES users (id),
+            FOREIGN KEY (donor_id) REFERENCES users (id)
+        )
+    """)
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            content TEXT NOT NULL,
+            blood_bank_id INTEGER,
+            timestamp DATETIME NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (blood_bank_id) REFERENCES blood_banks (id)
+        )
+    """)
+
+    db.commit()
+
+    # Add blood banks before checking users
+    add_mock_blood_bank()
+
+    # Insert Mock Data (Only if the 'admin' user does not exist)
+    admin_check = cursor.execute("SELECT id FROM users WHERE username='admin'").fetchone()
+
+    if not admin_check:
+        print("Inserting initial mock data...")
+
+        # Mock Users (DonorO_Plus gets a pending direct request)
+        users_data = [
+            ('admin', 'password', 'AB+', 'Central City', 'admin'),
+            ('DonorO_Plus', 'password', 'O+', 'Lahug, Cebu City', 'donor'),
+            ('DonorA_Minus', 'password', 'A-', 'Mandaue City', 'donor'),
+            ('RecipientB_Plus', 'password', 'B+', 'Central City', 'recipient'),
+        ]
+        cursor.executemany("INSERT INTO users (username, password, blood_type, location, role) VALUES (?, ?, ?, ?, ?)",
+                           users_data)
+
+        # Get necessary IDs
+        donor_o_plus_id = cursor.execute("SELECT id FROM users WHERE username='DonorO_Plus'").fetchone()[0]
+        recipient_b_plus_id = cursor.execute("SELECT id FROM users WHERE username='RecipientB_Plus'").fetchone()[0]
+
+        # Mock Requests
+        # Request 1: Pending Admin Approval (Admin Notification Trigger)
+        cursor.execute(
+            "INSERT INTO requests (requester_id, blood_type_needed, location_needed, contact_info, details, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (recipient_b_plus_id, 'A+', 'Central City Hospital', '0917-1234567',
+             'Need A+ for scheduled surgery.', 'Pending')
+        )
+        # Request 2: Approved and Visible to Donors
+        cursor.execute(
+            "INSERT INTO requests (requester_id, blood_type_needed, location_needed, contact_info, details, status) VALUES (?, ?, ?, ?, ?, ?)",
+            (recipient_b_plus_id, 'O-', 'Mandaue Hospital', '0917-0001111',
+             'Urgent O- need.', 'Approved')
+        )
+
+        # Mock Transaction (Donor Notification Trigger for DonorO_Plus)
+        cursor.execute(
+            "INSERT INTO transactions (requester_id, donor_id, blood_type_needed, location_needed, message, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (recipient_b_plus_id, donor_o_plus_id, 'O+', 'Cebu Doctors',
+             'Can you please donate O+? You were a suggested donor.',
+             datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Pending')
+        )
+
+        db.commit()
+        print("Database structure and initial data confirmed.")
+
+
+# Run the initialization function
+with app.app_context():
+    init_db_on_startup()
+
+
+# --- User/Session Management & Dashboard Rendering ---
+
 def get_user(user_id):
-    return USERS.get(user_id)
+    """Fetches user details by ID."""
+    if user_id is None:
+        return None
+    return query_db('SELECT * FROM users WHERE id = ?', (user_id,), one=True)
 
 
 def get_current_user():
-    user_id = session.get('user_id')
-    return get_user(user_id) if user_id else None
+    """Returns the current logged-in user object."""
+    return get_user(session.get('user_id'))
 
 
-# --- Core Authentication and Routing ---
+def render_donor_dashboard(user):
+    """Renders Donor Dashboard with Direct Transaction Notifications."""
+    # 1. Donor Notification (Direct Requests)
+    transactions = query_db(
+        """
+        SELECT t.*, r.username as recipient_username 
+        FROM transactions t 
+        JOIN users r ON t.requester_id = r.id 
+        WHERE t.donor_id = ? AND t.status = 'Pending' 
+        ORDER BY t.timestamp DESC
+        """,
+        (user['id'],)
+    )
 
-@app.before_request
-def check_authentication():
-    # Allow access to welcome, auth, login post, register post, and static files
-    allowed_endpoints = ['root_redirect', 'welcome', 'auth_page', 'login', 'register', 'logout']
-    if request.path.startswith(('/static', '/favicon.ico')):
-        return
+    # 2. Approved Public Requests matching donor's blood type (For Donation Offer)
+    public_requests = query_db(
+        "SELECT * FROM requests WHERE status = 'Approved' AND blood_type_needed = ? LIMIT 5", (user['blood_type'],)
+    )
 
-    # If user is logged in, redirect them away from entry points
-    if 'user_id' in session and request.endpoint in ['root_redirect', 'welcome', 'auth_page']:
-        return redirect(url_for('dashboard'))
+    blood_banks = query_db('SELECT * FROM blood_banks')
 
-    # If user is NOT authenticated, redirect protected routes to login/register
-    if 'user_id' not in session and request.endpoint not in allowed_endpoints:
-        return redirect(url_for('auth_page'))
+    return render_template('donor_dashboard.html',
+                           user=user,
+                           transactions=transactions,  # Donor's direct requests/notifications
+                           requests=public_requests,
+                           blood_banks=blood_banks)
 
 
-# The root path, which starts the flash sequence
+def render_admin_dashboard(user):
+    """Renders Admin Dashboard with Pending Public Request Notifications."""
+    # Admin Notification (Pending Public Requests)
+    pending_requests = query_db(
+        """
+        SELECT r.*, u.username as requester_username 
+        FROM requests r 
+        JOIN users u ON r.requester_id = u.id 
+        WHERE r.status = 'Pending' 
+        ORDER BY r.id ASC
+        """
+    )
+
+    all_users = query_db('SELECT id, username, role, blood_type, location FROM users ORDER BY id ASC')
+
+    return render_template('admin_dashboard.html',
+                           user=user,
+                           pending_requests=pending_requests,  # Admin's notifications
+                           all_users=all_users)
+
+
+# --- Authentication Routes ---
+
 @app.route('/')
-def root_redirect():
-    return redirect(url_for('welcome'))
-
-
-# Route for the simple welcome page (The Flash Screen)
-@app.route('/welcome')
-def welcome():
+def home():
+    user = get_current_user()
+    if user:
+        return redirect(url_for('dashboard'))
     return render_template('home.html')
 
 
-# The main combined Login/Register page
-@app.route('/auth')  # Changed route to /auth
+@app.route('/auth')
 def auth_page():
-    return render_template('index.html')
+    return render_template('auth.html')
 
 
-# POST handler for Login
-@app.route('/login', methods=['POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
-    username = request.form.get('username')
-    password = request.form.get('password')
-
-    for user_id, user in USERS.items():
-        if user['username'] == username and user['password'] == password:
-            session['user_id'] = user_id
+    if request.method == 'POST':
+        username = request.form['username']
+        password = request.form['password']
+        user = query_db('SELECT * FROM users WHERE username = ? AND password = ?', (username, password), one=True)
+        if user:
+            session['user_id'] = user['id']
+            flash(f'Logged in successfully as {user["username"]} ({user["role"]}).', 'success')
             return redirect(url_for('dashboard'))
-
-    # If login fails, redirect back to the auth page (The tab mechanism in index.html will reset)
+        else:
+            flash('Invalid username or password.', 'error')
+            return render_template('auth.html', error='Invalid username or password.', show_login=True)
     return redirect(url_for('auth_page'))
 
 
-# POST handler for Registration
-@app.route('/register', methods=['POST'])
+@app.route('/register', methods=['GET', 'POST'])
 def register():
-    global next_user_id
+    if request.method == 'POST':
+        new_username = request.form['new_username']
+        new_password = request.form['new_password']
+        blood_type = request.form['blood_type']
+        location = request.form['location']
+        role = request.form['role']
+        existing_user = query_db('SELECT * FROM users WHERE username = ?', (new_username,), one=True)
+        if existing_user:
+            flash('Username already taken.', 'error')
+            return render_template('auth.html', error='Username already taken.', show_register=True)
 
-    new_username = request.form.get('new_username')
-    new_password = request.form.get('new_password')
-    blood_type = request.form.get('blood_type')
-    location = request.form.get('location')
-    role = request.form.get('role')
+        execute_db(
+            'INSERT INTO users (username, password, blood_type, location, role) VALUES (?, ?, ?, ?, ?)',
+            (new_username, new_password, blood_type, location, role)
+        )
+        new_user = query_db('SELECT * FROM users WHERE username = ?', (new_username,), one=True)
+        session['user_id'] = new_user['id']
 
-    # Simple check for existing username
-    if any(user['username'] == new_username for user in USERS.values()):
-        # In a real app, you'd show an error. Redirect back to auth page for simplicity.
-        return redirect(url_for('auth_page'))
-
-    # Create new user
-    user_data = {
-        'id': next_user_id,
-        'username': new_username,
-        'password': new_password,
-        'blood_type': blood_type,
-        'location': location,
-        'role': role
-    }
-    USERS[next_user_id] = user_data
-    session['user_id'] = next_user_id
-    next_user_id += 1
-
-    return redirect(url_for('dashboard'))
+        flash(f'Account created and logged in successfully as {new_user["role"]}.', 'success')
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('auth_page'))
 
 
-# User Logout
 @app.route('/logout')
 def logout():
     session.pop('user_id', None)
-    return redirect(url_for('auth_page'))
+    flash('You have been logged out.', 'info')
+    return redirect(url_for('home'))
 
 
-# Role-based Dashboard Router
 @app.route('/dashboard')
 def dashboard():
     user = get_current_user()
     if not user:
+        flash('Please log in to view your dashboard.', 'warning')
         return redirect(url_for('auth_page'))
 
     if user['role'] == 'donor':
         return render_donor_dashboard(user)
     elif user['role'] == 'recipient':
-        return render_recipient_dashboard(user)
+        # Recipients go to the search/request page
+        return redirect(url_for('search_donors'))
     elif user['role'] == 'admin':
-        # Simple admin dashboard placeholder
-        return f"Admin Dashboard for {user['username']}. Functionality not implemented."
+        return render_admin_dashboard(user)
     else:
+        flash('Unknown user role.', 'error')
         return redirect(url_for('logout'))
 
 
-# --- Donor Dashboard Functions ---
+# --- Donor Post Story Route (NEW FIX) ---
 
-def render_donor_dashboard(user):
-    # Filter public requests that are 'Approved'
-    approved_requests = [req for req in REQUESTS.values() if req['status'] == 'Approved']
-
-    # Filter direct transactions where the current donor is the target
-    donor_transactions = [tx for tx in TRANSACTIONS.values() if tx['donor_id'] == user['id']]
-
-    # Attach recipient data to transactions
-    for tx in donor_transactions:
-        tx['recipient'] = get_user(tx['recipient_id'])
-
-    # Filter posts made by the current user
-    user_posts = [post for post in POSTS.values() if post['user_id'] == user['id']]
-    for post in user_posts:
-        if post['blood_bank_id']:
-            post['blood_bank'] = BLOOD_BANKS.get(post['blood_bank_id'])
-
-    return render_template('donor_dashboard.html',
-                           username=user['username'],
-                           blood_type=user['blood_type'],
-                           location=user['location'],
-                           requests=approved_requests,
-                           transactions=donor_transactions,
-                           posts=user_posts,
-                           blood_banks=BLOOD_BANKS.values())
-
-
-@app.route('/post_blood', methods=['POST'])
-def post_blood():
-    global next_post_id
+@app.route('/post_story', methods=['POST'])
+def post_story():
+    """Handles a donor submitting a donation success story."""
     user = get_current_user()
     if not user or user['role'] != 'donor':
-        return abort(403)
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
 
-    content = request.form.get('content')
+    content = request.form['content']
+    # blood_bank_id can be None (if the default option is selected)
     blood_bank_id = request.form.get('blood_bank_id')
 
-    # Create new donation post
-    post_data = {
-        'id': next_post_id,
-        'user_id': user['id'],
-        'content': content,
-        'blood_bank_id': int(blood_bank_id) if blood_bank_id else None,
-    }
-    POSTS[next_post_id] = post_data
-    next_post_id += 1
+    # Convert empty string from select input to None for the database
+    if blood_bank_id == '':
+        blood_bank_id = None
+
+    try:
+        execute_db(
+            'INSERT INTO posts (user_id, content, blood_bank_id, timestamp) VALUES (?, ?, ?, ?)',
+            (user['id'], content, blood_bank_id, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        )
+        flash('Your donation success story has been posted!', 'success')
+    except Exception as e:
+        flash(f'Failed to post story due to an error.', 'error')
+        print(f"Error posting story: {e}")
 
     return redirect(url_for('dashboard'))
 
 
-# --- Recipient Dashboard Functions ---
+# --- Recipient Search & Request Routes ---
 
-def render_recipient_dashboard(user):
-    # Filter public requests posted by this recipient
-    user_requests = [req for req in REQUESTS.values() if req['requester_id'] == user['id']]
-
-    return render_template('recipient_dashboard.html',
-                           username=user['username'],
-                           blood_type=user['blood_type'],
-                           location=user['location'],
-                           requests=user_requests,
-                           cebu_hospitals=CEBU_HOSPITALS)  # Pass Cebu hospitals list
-
-
-@app.route('/post_request', methods=['POST'])
-def post_request():
-    global next_request_id
-    user = get_current_user()
-    if not user or user['role'] != 'recipient':
-        return abort(403)
-
-    blood_type_needed = request.form.get('blood_type_needed')
-    location_needed = request.form.get('location_needed')
-    contact_info = request.form.get('contact_info')
-    details = request.form.get('details')
-
-    # Create new public request (initially Pending)
-    request_data = {
-        'id': next_request_id,
-        'requester_id': user['id'],
-        'blood_type_needed': blood_type_needed,
-        'location_needed': location_needed,
-        'contact_info': contact_info,
-        'details': details,
-        'status': 'Pending'  # Needs Admin approval
-    }
-    REQUESTS[next_request_id] = request_data
-    next_request_id += 1
-
-    return redirect(url_for('dashboard'))
-
-
-# **THIS IS THE CORRECT ENDPOINT NAME**
-@app.route('/search_donors', methods=['POST'])
+@app.route('/search_donors')
 def search_donors():
     user = get_current_user()
     if not user or user['role'] != 'recipient':
-        return redirect(url_for('auth_page'))
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
 
-    search_blood_type = request.form.get('search_blood_type')
-    search_location = request.form.get('search_location', '').lower().strip()
+    # Load recipient's existing requests and transactions for their dashboard view
+    my_requests = query_db("""
+        SELECT r.*, d.username as donor_username
+        FROM requests r
+        LEFT JOIN users d ON r.donor_id = d.id
+        WHERE r.requester_id = ? 
+        ORDER BY r.id DESC
+    """, (user['id'],))
 
-    # Find matching donors
-    matching_donors = []
-    for u in USERS.values():
-        is_donor = u['role'] == 'donor'
-        matches_type = u['blood_type'] == search_blood_type
-        matches_location = search_location in u['location'].lower()
+    my_transactions = query_db(
+        'SELECT t.*, d.username as donor_username FROM transactions t JOIN users d ON t.donor_id = d.id WHERE t.requester_id = ? ORDER BY t.timestamp DESC',
+        (user['id'],)
+    )
 
-        # Exclude the current user from search results
-        is_not_self = u['id'] != user['id']
+    return render_template('search_donors.html',
+                           user=user,
+                           donors=[],
+                           search_params=None,
+                           my_requests=my_requests,
+                           my_transactions=my_transactions)
 
-        if is_donor and matches_type and matches_location and is_not_self:
-            matching_donors.append(u)
+
+@app.route('/search', methods=['POST'])
+def search():
+    user = get_current_user()
+    if not user or user['role'] != 'recipient':
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
+
+    blood_type = request.form['blood_type']
+    location_keyword = request.form['location'].strip()
 
     search_params = {
-        'blood_type': search_blood_type,
-        'location': request.form.get('search_location').strip()
+        'blood_type': blood_type,
+        'location': location_keyword
     }
 
-    return render_template('search_results.html',
-                           donors=matching_donors,
+    # Fetches 'Suggested Donors'
+    sql = """
+        SELECT id, username, blood_type, location, role FROM users
+        WHERE role = 'donor'
+        AND blood_type = ?
+        AND location LIKE ?
+        AND id != ?
+    """
+    donors = query_db(sql, (blood_type, f'%{location_keyword}%', user['id']))
+
+    flash(f'Found {len(donors)} suggested donor(s) matching your criteria.', 'success')
+
+    # Load recipient's existing requests and transactions again for the template
+    my_requests = query_db("""
+        SELECT r.*, d.username as donor_username
+        FROM requests r
+        LEFT JOIN users d ON r.donor_id = d.id
+        WHERE r.requester_id = ? 
+        ORDER BY r.id DESC
+    """, (user['id'],))
+
+    my_transactions = query_db(
+        'SELECT t.*, d.username as donor_username FROM transactions t JOIN users d ON t.donor_id = d.id WHERE t.requester_id = ? ORDER BY t.timestamp DESC',
+        (user['id'],)
+    )
+
+    return render_template('search_donors.html',
+                           user=user,
+                           donors=donors,  # The suggested donors
                            search_params=search_params,
-                           current_user_role=user['role'])
+                           my_requests=my_requests,
+                           my_transactions=my_transactions)
 
 
 @app.route('/send_transaction', methods=['POST'])
 def send_transaction():
-    global next_tx_id
+    """Recipient sends a direct request (Donor Notification Trigger)."""
     user = get_current_user()
     if not user or user['role'] != 'recipient':
-        return abort(403)
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
 
-    donor_id = int(request.form.get('donor_id'))
-    message = request.form.get('message')
-    blood_type_needed = request.form.get('blood_type_needed')
-    location_needed = request.form.get('location_needed')
+    donor_id = request.form.get('donor_id', type=int)
+    message = request.form['message']
+    blood_type_needed = request.form['blood_type_needed']
+    location_needed = request.form['location_needed']
 
     donor = get_user(donor_id)
     if not donor or donor['role'] != 'donor':
-        # Should not happen if search worked correctly
-        return "Error: Invalid Donor ID", 400
+        flash('Invalid donor selected.', 'error')
+        return redirect(url_for('search_donors'))
 
-        # Create new direct transaction
-    tx_data = {
-        'id': next_tx_id,
-        'recipient_id': user['id'],
-        'donor_id': donor_id,
-        'message': message,
-        'blood_type_needed': blood_type_needed,
-        'location_needed': location_needed,
-        'status': 'Pending Contact'
-    }
-    TRANSACTIONS[next_tx_id] = tx_data
-    next_tx_id += 1
+    execute_db(
+        'INSERT INTO transactions (requester_id, donor_id, blood_type_needed, location_needed, message, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (user['id'], donor_id, blood_type_needed, location_needed, message,
+         datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Pending')
+    )
 
-    # Redirect back to search results or dashboard after sending
+    flash(f'Contact request sent to {donor["username"]}! They will be notified in their dashboard.', 'success')
+    return redirect(url_for('search_donors'))
+
+
+@app.route('/submit_request', methods=['POST'])
+def submit_request():
+    """Recipient submits a public request (Admin Notification Trigger)."""
+    user = get_current_user()
+    if not user or user['role'] != 'recipient':
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
+
+    blood_type_needed = request.form['blood_type_needed']
+    location_needed = request.form['location_needed']
+    contact_info = request.form['contact_info']
+    details = request.form['details']
+
+    # Status set to 'Pending' to trigger Admin Notification
+    execute_db(
+        'INSERT INTO requests (requester_id, blood_type_needed, location_needed, contact_info, details, status) VALUES (?, ?, ?, ?, ?, ?)',
+        (user['id'], blood_type_needed, location_needed, contact_info, details, 'Pending')
+    )
+
+    flash('Public blood request submitted for admin approval.', 'success')
+    return redirect(url_for('search_donors'))
+
+
+# --- Admin Approval Routes ---
+
+@app.route('/admin/approve_request/<int:request_id>', methods=['POST'])
+def admin_approve_request(request_id):
+    user = get_current_user()
+    if not user or user['role'] != 'admin':
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
+
+    execute_db('UPDATE requests SET status = ? WHERE id = ?', ('Approved', request_id))
+    flash(f'Public Request #{request_id} approved. It is now visible to relevant donors.', 'success')
     return redirect(url_for('dashboard'))
 
 
-# --- Dummy Data Setup (for easy testing) ---
-# Create a Donor
-USERS[next_user_id] = {
-    'id': next_user_id,
-    'username': 'juan_dela_cruz',
-    'password': 'password123',
-    'blood_type': 'O+',
-    'location': 'Mandaue, Cebu',
-    'role': 'donor'
-}
-next_user_id += 1
+@app.route('/admin/decline_request/<int:request_id>', methods=['POST'])
+def admin_decline_request(request_id):
+    user = get_current_user()
+    if not user or user['role'] != 'admin':
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
 
-# Create a Recipient
-USERS[next_user_id] = {
-    'id': next_user_id,
-    'username': 'maria_needa',
-    'password': 'password123',
-    'blood_type': 'A-',
-    'location': 'Lahug, Cebu',
-    'role': 'recipient'
-}
-recipient_id = next_user_id
-next_user_id += 1
+    execute_db('UPDATE requests SET status = ? WHERE id = ?', ('Declined', request_id))
+    flash(f'Public Request #{request_id} declined.', 'warning')
+    return redirect(url_for('dashboard'))
 
-# Create an Admin
-USERS[next_user_id] = {
-    'id': next_user_id,
-    'username': 'admin_boss',
-    'password': 'admin',
-    'blood_type': 'B+',
-    'location': 'Central Office',
-    'role': 'admin'
-}
-next_user_id += 1
 
-# Create a sample approved public request (to show on donor dashboard)
-REQUESTS[1] = {
-    'id': 1,
-    'requester_id': recipient_id,
-    'blood_type_needed': 'B-',
-    'location_needed': 'Velez General Hospital',
-    'contact_info': '123-456-7890',
-    'details': 'Patient is critical.',
-    'status': 'Approved'
-}
-next_request_id = 2
-
+# --- Main Run ---
 if __name__ == '__main__':
+    # Setting debug=True for easier development, turn off in production
     app.run(debug=True)

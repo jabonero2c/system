@@ -6,17 +6,14 @@
     <title>SaveABlood - Login/Register</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
     <style>
-        /* Custom styles added to fulfill the request and enhance aesthetics */
         :root {
             --primary-red: #e63946;
             --secondary-blue: #1d3557;
-            --light-bg: #f1faee; /* Lightest color from the Home Page gradient */
-            --light-pink: #f8d7da; /* Middle color from the Home Page gradient */
+            --light-bg: #f1faee;
+            --light-pink: #f8d7da;
         }
 
-        /* 1. Set background to the full gradient from the Home Page hero section */
         body {
-            /* Using the full gradient: red -> light pink -> lightest white */
             background: linear-gradient(to right, var(--primary-red), var(--light-pink), var(--light-bg));
             font-family: "Poppins", Arial, sans-serif;
             display: flex;
@@ -28,17 +25,17 @@
         }
 
         h1 {
-            color: var(--secondary-blue); /* Dark text color for readability over the gradient */
+            color: var(--secondary-blue);
             margin-bottom: 40px;
             font-size: 2em;
-            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5); /* Helps text stand out */
+            text-shadow: 1px 1px 2px rgba(255, 255, 255, 0.5);
         }
 
         form {
-            background-color: white; /* Forms are white for high readability */
+            background-color: white;
             padding: 30px;
             border-radius: 12px;
-            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2); /* Stronger shadow over gradient */
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
             margin-bottom: 30px;
             width: 90%;
             max-width: 400px;
@@ -50,13 +47,8 @@
             box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
         }
 
-        /* Different border colors for visual grouping */
-        form[action*="login"] {
-            border-top: 5px solid var(--secondary-blue);
-        }
-        #register {
-            border-top: 5px solid var(--primary-red);
-        }
+        form[action*="login"] { border-top: 5px solid var(--secondary-blue); }
+        #register { border-top: 5px solid var(--primary-red); }
 
         form h2 {
             color: var(--secondary-blue);
@@ -81,11 +73,7 @@
             outline: none;
         }
 
-        /* Styling for Donor/Recipient selector background */
-        select[name="role"] {
-            background-color: var(--light-bg);
-            font-weight: 500;
-        }
+        select[name="role"] { background-color: var(--light-bg); font-weight: 500; }
 
         input[type="submit"] {
             background-color: var(--primary-red);
@@ -99,9 +87,7 @@
             width: 100%;
         }
 
-        input[type="submit"]:hover {
-            background-color: var(--secondary-blue);
-        }
+        input[type="submit"]:hover { background-color: var(--secondary-blue); }
     </style>
 </head>
 <body>

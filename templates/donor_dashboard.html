@@ -1,83 +1,124 @@
-{% extends "base.html" %}
-
-{% block title %}Donor Dashboard{% endblock %}
-
-{% block body %}
-<!-- Main content container with white background and dark text for visibility -->
-<div class="w-full max-w-5xl mx-auto p-4 md:p-8 bg-white rounded-xl shadow-2xl text-gray-800">
-    <h2 class="text-3xl font-bold text-primary mb-6 border-b pb-2">Welcome, {{ username }} (Donor)</h2>
-
-    <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div class="bg-primary text-white p-4 rounded-lg shadow-md">
-            <p class="text-sm opacity-90">Your Blood Type</p>
-            <p class="text-2xl font-extrabold">{{ blood_type }}</p>
-        </div>
-        <div class="bg-mid-blue text-white p-4 rounded-lg shadow-md">
-            <p class="text-sm opacity-90">Your Location</p>
-            <p class="text-xl font-bold">{{ location }}</p>
-        </div>
-        <div class="bg-secondary text-white p-4 rounded-lg shadow-md">
-            <p class="text-sm opacity-90">Requests Received</p>
-            <p class="text-2xl font-extrabold">{{ transactions|length }}</p>
-        </div>
-    </div>
-
-    <!-- Section 1: Public Blood Requests (from Recipients, Admin Approved) -->
-    <div class="p-6 rounded-xl border border-gray-200 mb-8">
-        <h3 class="text-2xl font-semibold text-primary mb-4">Urgent Public Requests</h3>
-        {% if requests %}
-            <div class="space-y-4">
-                {% for req in requests %}
-                    <div class="bg-red-50 p-4 rounded-lg shadow border-l-4 border-red-500">
-                        <p class="font-bold text-xl text-primary">{{ req.blood_type_needed }} NEEDED</p>
-                        <p class="text-sm text-gray-600">Location: {{ req.location_needed }} | Contact: {{ req.contact_info }}</p>
-                        <p class="mt-1 text-gray-700">{{ req.details }}</p>
-                        <p class="text-xs mt-2 font-semibold text-green-700">Status: <span class="font-extrabold">{{ req.status }}</span> (Contact immediately if you can help)</p>
-                    </div>
-                {% endfor %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Donor Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f7f7f7; }
+        .card { @apply bg-white p-6 rounded-xl shadow-lg border border-gray-100; }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen bg-gray-50">
+        <!-- Header -->
+        <header class="bg-red-700 text-white p-4 shadow-md">
+            <div class="container mx-auto flex justify-between items-center">
+                <h1 class="text-3xl font-bold">Donor Dashboard</h1>
+                <div class="flex items-center space-x-4">
+                    <span class="font-semibold">{{ user.username }} ({{ user.blood_type }})</span>
+                    <a href="{{ url_for('logout') }}" class="bg-white text-red-700 font-medium py-1 px-4 rounded-lg hover:bg-red-100 transition">Logout</a>
+                </div>
             </div>
-        {% else %}
-            <p class="text-gray-500 italic">No approved public requests currently available in your area.</p>
-        {% endif %}
-    </div>
+        </header>
 
-    <!-- Section 2: Direct Requests (Transactions) -->
-    <div class="p-6 rounded-xl border border-gray-200 mb-8">
-        <h3 class="text-2xl font-semibold text-mid-blue mb-4">Direct Recipient Messages</h3>
-        {% if transactions %}
-            <div class="space-y-4">
-                {% for tx in transactions %}
-                    <div class="bg-blue-50 p-4 rounded-lg shadow border-l-4 border-mid-blue">
-                        <p class="font-bold text-xl">From: {{ tx.recipient.username }} ({{ tx.blood_type_needed }})</p>
-                        <p class="text-sm text-gray-600">Needed at: {{ tx.location_needed }}</p>
-                        <p class="mt-1 text-gray-700 italic">"{{ tx.message }}"</p>
-                        <p class="text-xs mt-2 font-semibold">Status: <span class="font-extrabold text-mid-blue">{{ tx.status }}</span></p>
+        <!-- Flash Messages -->
+        <div class="container mx-auto mt-4 px-4">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="mb-4 space-y-2">
+                        {% for category, message in messages %}
+                            <div class="p-3 rounded-lg text-sm font-medium {% if category == 'error' %}bg-red-100 text-red-700{% elif category == 'success' %}bg-green-100 text-green-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                                {{ message }}
+                            </div>
+                        {% endfor %}
                     </div>
-                {% endfor %}
+                {% endif %}
+            {% endwith %}
+        </div>
+
+        <!-- Main Content Grid -->
+        <main class="container mx-auto p-4 grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Direct Request Notifications (Crucial) -->
+            <div class="lg:col-span-1">
+                <div class="card bg-red-50 border-red-200">
+                    <h2 class="text-2xl font-bold text-red-700 mb-4 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.405L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        </svg>
+                        Direct Request Notifications ({{ transactions|length }})
+                    </h2>
+                    
+                    {% if transactions %}
+                        <div class="space-y-4">
+                            {% for tx in transactions %}
+                                <div class="p-4 bg-white rounded-lg shadow-md border-l-4 border-red-500">
+                                    <p class="font-semibold text-gray-900">From: {{ tx.recipient_username }}</p>
+                                    <p class="text-sm text-gray-600 mt-1">
+                                        Needs <span class="font-bold text-red-600">{{ tx.blood_type_needed }}</span> at {{ tx.location_needed }}
+                                    </p>
+                                    <p class="text-xs text-gray-500 italic mt-2">"{{ tx.message }}"</p>
+                                    <form action="#" method="POST" class="mt-3 flex justify-end">
+                                        <button type="submit" class="bg-red-600 text-white text-sm py-1 px-3 rounded-md hover:bg-red-700 transition">Respond</button>
+                                        <!-- NOTE: Actual response/status update logic would require a new route -->
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-gray-500 text-sm">No new direct requests have been sent to you yet.</p>
+                    {% endif %}
+                </div>
             </div>
-        {% else %}
-            <p class="text-gray-500 italic">You have not received any direct contact requests yet.</p>
-        {% endif %}
+            
+            <!-- Public Requests and Donation Form -->
+            <div class="lg:col-span-2 space-y-6">
+
+                <!-- Available Public Requests (Matching your blood type) -->
+                <div class="card">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Approved Public Requests ({{ user.blood_type }} Needed)</h2>
+                    
+                    {% if requests %}
+                        <div class="space-y-4">
+                            {% for req in requests %}
+                                <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <p class="font-semibold text-lg text-red-700">Type: {{ req.blood_type_needed }}</p>
+                                    <p class="text-sm text-gray-600">Location: {{ req.location_needed }}</p>
+                                    <p class="text-sm text-gray-500">Details: {{ req.details }}</p>
+                                    <form action="{{ url_for('offer_donation', request_id=req.id) }}" method="POST" class="mt-3">
+                                        <button type="submit" class="bg-green-600 text-white text-sm py-2 px-4 rounded-md hover:bg-green-700 transition">
+                                            Offer to Donate
+                                        </button>
+                                    </form>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <p class="text-gray-500">No public requests matching your blood type are currently approved and active.</p>
+                    {% endif %}
+                </div>
+
+                <!-- Post Donation Success Story (FIXED) -->
+                <div class="card">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-4">Share Your Donation Success</h2>
+                    <form action="{{ url_for('post_story') }}" method="POST" class="space-y-4">
+                        <textarea name="content" rows="3" placeholder="I just donated {{ user.blood_type }} at..." required class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500"></textarea>
+                        
+                        <select name="blood_bank_id" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-red-500 focus:border-red-500">
+                            <option value="">-- Optional: Select Blood Bank --</option>
+                            {% for bank in blood_banks %}
+                                <option value="{{ bank.id }}">{{ bank.name }} ({{ bank.location }})</option>
+                            {% endfor %}
+                        </select>
+                        
+                        <button type="submit" class="bg-blue-600 text-white py-2 px-6 rounded-lg font-semibold hover:bg-blue-700 transition">Post Story</button>
+                    </form>
+                </div>
+
+            </div>
+        </main>
     </div>
-
-    <!-- Section 3: Post Your Donation -->
-    <div class="p-6 rounded-xl border border-gray-200">
-        <h3 class="text-xl font-semibold text-secondary mb-4">Post a Successful Donation</h3>
-        <form action="{{ url_for('post_blood') }}" method="POST" class="space-y-4">
-            <textarea name="content" placeholder="Share your donation experience (e.g., 'Just donated O+ at [Blood Bank]!')" class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800" rows="2" required></textarea>
-
-            <select name="blood_bank_id" class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
-                <option value="" selected>Select where you donated (Optional)</option>
-                {% for bank in blood_banks %}
-                    <option value="{{ bank.id }}">{{ bank.name }} ({{ bank.location }})</option>
-                {% endfor %}
-            </select>
-
-            <button type="submit" class="bg-secondary text-white py-2 px-4 rounded-lg hover:bg-mid-blue transition duration-300 shadow-md">
-                Post Donation
-            </button>
-        </form>
-    </div>
-</div>
-{% endblock %}
+</body>
+</html>

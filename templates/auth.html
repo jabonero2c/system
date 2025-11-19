@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Login / Register{% endblock %}
+
+{% block body %}
+<div class="flex justify-center items-center w-full min-h-screen -mt-16 gradient-background p-4">
+    <div class="w-full max-w-md bg-white rounded-xl shadow-2xl overflow-hidden">
+        <div class="flex justify-center text-center p-2 bg-gray-50 border-b border-gray-200">
+            <button id="loginTab" class="flex-1 py-3 px-4 text-lg font-semibold rounded-tl-lg
+                {% if error and show_register %}text-gray-600{% else %}text-white bg-primary{% endif %}"
+                onclick="showForm('login')">
+                Login
+            </button>
+            <button id="registerTab" class="flex-1 py-3 px-4 text-lg font-semibold rounded-tr-lg
+                {% if error and show_register %}text-white bg-secondary{% else %}text-gray-600{% endif %}"
+                onclick="showForm('register')">
+                Register
+            </button>
+        </div>
+
+        <div id="loginFormContainer" class="p-8 {% if error and show_register %}hidden{% endif %}">
+            <h2 class="text-2xl font-bold text-secondary mb-6 text-center">Login to SaveABlood</h2>
+            <form action="{{ url_for('login') }}" method="POST" class="space-y-5">
+                <div>
+                    <label for="login-username" class="block text-sm font-medium text-gray-700">Username</label>
+                    <input type="text" name="username" id="login-username" required
+                           class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" name="password" id="login-password" required
+                           class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-primary focus:ring focus:ring-primary focus:ring-opacity-50">
+                </div>
+                {% if error and show_login %}
+                    <p class="text-red-600 text-sm">{{ error }}</p>
+                {% endif %}
+                <button type="submit" class="w-full py-3 px-4 bg-primary hover:bg-red-700 text-white font-bold rounded-md transition duration-200 shadow-md">
+                    Login
+                </button>
+            </form>
+            <p class="text-center text-sm mt-6 text-gray-600">Not a member? <a href="#" onclick="showForm('register')" class="text-secondary hover:underline font-semibold">Sign up now</a></p>
+        </div>
+
+        <div id="registerFormContainer" class="p-8 {% if not error or not show_register %}hidden{% endif %}">
+            <h2 class="text-2xl font-bold text-secondary mb-6 text-center">Register New Account</h2>
+            <form action="{{ url_for('register') }}" method="POST" class="space-y-5">
+                <div>
+                    <label for="register-username" class="block text-sm font-medium text-gray-700">Username</label>
+                    <input type="text" name="new_username" id="register-username" required
+                           class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                </div>
+                <div>
+                    <label for="register-password" class="block text-sm font-medium text-gray-700">Password</label>
+                    <input type="password" name="new_password" id="register-password" required
+                           class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label for="register-blood_type" class="block text-sm font-medium text-gray-700">Blood Type</label>
+                        <select name="blood_type" id="register-blood_type" required
+                                class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50 bg-white">
+                            <option value="" disabled selected>Select Blood Type</option>
+                            <option value="O+">O RhD positive (O+)</option>
+                            <option value="O-">O RhD negative (O-)</option>
+                            <option value="A+">A RhD positive (A+)</option>
+                            <option value="A-">A RhD negative (A-)</option>
+                            <option value="B+">B RhD positive (B+)</option>
+                            <option value="B-">B RhD negative (B-)</option>
+                            <option value="AB+">AB RhD positive (AB+)</option>
+                            <option value="AB-">AB RhD negative (AB-)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="register-location" class="block text-sm font-medium text-gray-700">Location</label>
+                        <input type="text" name="location" id="register-location" placeholder="e.g., Cebu City" required
+                               class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50">
+                    </div>
+                </div>
+                <div>
+                    <label for="register-role" class="block text-sm font-medium text-gray-700">I am a...</label>
+                    <select name="role" id="register-role" required
+                            class="mt-1 w-full p-3 border border-gray-300 rounded-md focus:border-secondary focus:ring focus:ring-secondary focus:ring-opacity-50 bg-white">
+                        <option value="donor">Donor</option>
+                        <option value="recipient">Recipient</option>
+                    </select>
+                </div>
+                {% if error and show_register %}
+                    <p class="text-red-600 text-sm">{{ error }}</p>
+                {% endif %}
+                <button type="submit" class="w-full py-3 px-4 bg-secondary hover:bg-mid-blue text-white font-bold rounded-md transition duration-200 shadow-md">
+                    Register Account
+                </button>
+            </form>
+            <p class="text-center text-sm mt-6 text-gray-600">Already have an account? <a href="#" onclick="showForm('login')" class="text-primary hover:underline font-semibold">Login here</a></p>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showForm(formType) {
+        const loginForm = document.getElementById('loginFormContainer');
+        const registerForm = document.getElementById('registerFormContainer');
+        const loginTab = document.getElementById('loginTab');
+        const registerTab = document.getElementById('registerTab');
+
+        if (formType === 'login') {
+            loginForm.classList.remove('hidden');
+            registerForm.classList.add('hidden');
+            loginTab.classList.add('bg-primary', 'text-white');
+            loginTab.classList.remove('text-gray-600');
+            registerTab.classList.remove('bg-secondary', 'text-white');
+            registerTab.classList.add('text-gray-600');
+        } else {
+            registerForm.classList.remove('hidden');
+            loginForm.classList.add('hidden');
+            registerTab.classList.add('bg-secondary', 'text-white');
+            registerTab.classList.remove('text-gray-600');
+            loginTab.classList.remove('bg-primary', 'text-white');
+            loginTab.classList.add('text-gray-600');
+        }
+    }
+
+    // Call showForm based on initial load state (e.g., if there was a register error)
+    document.addEventListener('DOMContentLoaded', () => {
+        {% if error and show_register %}
+            showForm('register');
+        {% elif error and show_login %}
+            showForm('login');
+        {% else %}
+            showForm('login'); // Default to login if no specific error
+        {% endif %}
+    });
+</script>
+{% endblock %}

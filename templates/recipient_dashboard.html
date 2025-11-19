@@ -1,101 +1,258 @@
 {% extends "base.html" %}
 
-{% block title %}Recipient Dashboard{% endblock %}
+{% block title %}Recipient Dashboard & Donor Search{% endblock %}
 
 {% block body %}
-<!-- Main content container with white background and dark text for visibility -->
-<div class="w-full max-w-5xl mx-auto p-4 md:p-8 bg-white rounded-xl shadow-2xl text-gray-800">
-    <h2 class="text-3xl font-bold text-primary mb-6 border-b pb-2">Welcome, {{ username }} (Recipient)</h2>
+<div class="w-full max-w-7xl mx-auto p-4 md:p-8">
+
+    <header class="flex justify-between items-center border-b pb-4 mb-6">
+        <h1 class="text-2xl font-bold text-primary">Recipient Dashboard & Donor Search</h1>
+    </header>
+
+    <!-- Recipient Stats & Quick Actions -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div class="bg-primary text-white p-4 rounded-lg shadow-md">
             <p class="text-sm opacity-90">Your Blood Type</p>
-            <p class="text-2xl font-extrabold">{{ blood_type }}</p>
+            <p class="text-2xl font-extrabold">{{ current_user.blood_type }}</p>
         </div>
         <div class="bg-mid-blue text-white p-4 rounded-lg shadow-md">
             <p class="text-sm opacity-90">Your Location</p>
-            <p class="text-xl font-bold">{{ location }}</p>
+            <p class="text-xl font-bold">{{ current_user.location }}</p>
         </div>
         <div class="bg-secondary text-white p-4 rounded-lg shadow-md">
-            <p class="text-sm opacity-90">Requests Posted</p>
-            <p class="text-2xl font-extrabold">{{ requests|length }}</p>
+            <p class="text-sm opacity-90">Pending Direct Requests</p>
+            <p class="text-2xl font-extrabold">{{ my_transactions|length }}</p>
         </div>
     </div>
 
-    <!-- Section 1: Search for Donors (Text visibility fixed by parent div) -->
-    <div class="p-6 rounded-xl border border-gray-200 mb-8">
-        <h3 class="text-xl font-semibold text-primary mb-4">Find Donors Near You</h3>
-        <form action="{{ url_for('search_donors') }}" method="POST" class="flex flex-col md:flex-row gap-4">
-            <!-- Explicitly setting text-gray-800 on form elements for consistency -->
-            <select name="search_blood_type" required class="flex-1 p-3 border rounded-md focus:ring-primary focus:border-primary text-gray-800">
-                <option value="" disabled selected>Blood Type to Search For</option>
-                <option value="A+">A+</option>
-                <option value="A-">A-</option>
-                <option value="B+">B+</option>
-                <option value="B-">B-</option>
-                <option value="AB+">AB+</option>
-                <option value="AB-">AB-</option>
-                <option value="O+">O+</option>
-                <option value="O-">O-</option>
-            </select>
-            <input type="text" name="search_location" placeholder="Location (e.g., Cebu)" required class="flex-1 p-3 border rounded-md focus:ring-primary focus:border-primary text-gray-800">
-            <button type="submit" class="bg-primary text-white py-2 px-4 rounded-lg hover:bg-mid-blue transition duration-300 shadow-md">
-                Search Donors
-            </button>
-        </form>
-    </div>
-
-    <!-- Section 2: Post Public Request (Text visibility fixed by parent div) -->
-    <div class="p-6 rounded-xl border border-gray-200 mb-8">
-        <h3 class="text-xl font-semibold text-secondary mb-4">Post a Public Request for Admin Approval</h3>
-        <form action="{{ url_for('post_request') }}" method="POST" class="space-y-4">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <select name="blood_type_needed" required class="p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
-                    <option value="" disabled selected>Blood Type Needed</option>
-                    <option value="A+">A+</option>
-                    <option value="A-">A-</option>
-                    <option value="B+">B+</option>
-                    <option value="B-">B-</option>
-                    <option value="AB+">AB+</option>
-                    <option value="AB-">AB-</option>
-                    <option value="O+">O+</option>
-                    <option value="O-">O-</option>
+    <!-- Search Card (for Direct Contact) -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-secondary">Find Matching Donors (Direct Contact)</h2>
+        <form action="{{ url_for('search') }}" method="POST" class="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3 items-end">
+            <div class="flex-grow w-full">
+                <label for="blood_type" class="block text-sm font-medium text-gray-700 mb-1">Blood Type</label>
+                <select name="blood_type" id="blood_type" required class="w-full p-2 border rounded-lg">
+                    <option value="" disabled {% if not search_params %}selected{% endif %}>Select Type</option>
+                    <option value="O+" {% if search_params and search_params.blood_type == 'O+' %}selected{% endif %}>O RhD positive (O+)</option>
+                    <option value="O-" {% if search_params and search_params.blood_type == 'O-' %}selected{% endif %}>O RhD negative (O-)</option>
+                    <option value="A+" {% if search_params and search_params.blood_type == 'A+' %}selected{% endif %}>A RhD positive (A+)</option>
+                    <option value="A-" {% if search_params and search_params.blood_type == 'A-' %}selected{% endif %}>A RhD negative (A-)</option>
+                    <option value="B+" {% if search_params and search_params.blood_type == 'B+' %}selected{% endif %}>B RhD positive (B+)</option>
+                    <option value="B-" {% if search_params and search_params.blood_type == 'B-' %}selected{% endif %}>B RhD negative (B-)</option>
+                    <option value="AB+" {% if search_params and search_params.blood_type == 'AB+' %}selected{% endif %}>AB RhD positive (AB+)</option>
+                    <option value="AB-" {% if search_params and search_params.blood_type == 'AB-' %}selected{% endif %}>AB RhD negative (AB-)</option>
                 </select>
-                <!-- UPDATED: Replaced text input with a select dropdown for Cebu Hospitals -->
-                <select name="location_needed" required class="p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
-                    <option value="" disabled selected>Hospital Needed (Cebu)</option>
-                    {% for hospital in cebu_hospitals %}
-                        <option value="{{ hospital }}">{{ hospital }}</option>
-                    {% endfor %}
-                </select>
-                <!-- END UPDATED -->
             </div>
-            <input type="text" name="contact_info" placeholder="Contact Phone or Email" required class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800">
-            <textarea name="details" placeholder="Brief details about the emergency and patient condition." class="w-full p-3 border rounded-md focus:ring-secondary focus:border-secondary text-gray-800" rows="3" required></textarea>
 
-            <button type="submit" class="bg-secondary text-white py-2 px-4 rounded-lg hover:bg-mid-blue transition duration-300 shadow-md">
-                Submit Request
-            </button>
+            <div class="flex-grow w-full">
+                <label for="location" class="block text-sm font-medium text-gray-700 mb-1">Location Keyword</label>
+                <input type="text" name="location" id="location" placeholder="e.g., Lahug or Mandaue" required
+                        value="{{ search_params.location if search_params and search_params.location else '' }}" class="w-full p-2 border rounded-lg">
+            </div>
+
+            <div class="w-full sm:w-auto">
+                <input type="submit" value="Search" class="w-full py-2 bg-primary text-white rounded-lg hover:bg-red-700 cursor-pointer transition">
+            </div>
         </form>
     </div>
 
-    <!-- Section 3: Your Posted Requests (Text visibility fixed by parent div) -->
-    <div>
-        <h3 class="text-2xl font-semibold text-mid-blue mb-4 border-b pb-2">Your Submitted Public Requests</h3>
-        {% if requests %}
-            <div class="space-y-4">
-                {% for req in requests %}
-                    <div class="bg-gray-50 p-4 rounded-lg shadow border-l-4
-                        {% if req.status == 'Approved' %}border-green-500{% elif req.status == 'Pending' %}border-yellow-500{% else %}border-red-500{% endif %}">
-                        <p class="font-bold text-xl">{{ req.blood_type_needed }}</p>
-                        <p class="text-sm text-gray-600">Location: {{ req.location_needed }} | Contact: {{ req.contact_info }}</p>
-                        <p class="mt-1 text-gray-700">{{ req.details }}</p>
-                        <p class="text-xs mt-2 font-semibold">Status: <span class="font-extrabold">{{ req.status }}</span> (Waiting for Admin approval)</p>
+    <!-- Results Card (Donor List) -->
+    <div class="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h2 class="text-xl font-semibold mb-4 text-primary">Search Results</h2>
+
+        {% if donors %}
+            <div class="space-y-3">
+                {% for donor in donors %}
+                    {% if current_user and donor.id != current_user.id %}
+                    <div class="p-4 border rounded-lg bg-gray-50 flex justify-between items-center">
+                        <div class="donor-details">
+                            <p class="text-lg font-semibold">{{ donor.username }}</p>
+                            <p class="text-sm text-gray-600">
+                                Blood Type: <strong class="text-primary">{{ donor.blood_type }}</strong> |
+                                Location: {{ donor.location }}
+                            </p>
+                        </div>
+
+                        <button type="button" class="py-1 px-3 bg-secondary text-white rounded-lg text-sm hover:bg-mid-blue transition"
+                            onclick="showRequestModal(
+                                '{{ donor.id }}',
+                                '{{ donor.username }}',
+                                '{{ donor.blood_type }}'
+                            )">
+                                Request Contact
+                        </button>
                     </div>
+                    {% endif %}
                 {% endfor %}
             </div>
+        {% elif search_params %}
+            <p class="text-gray-500 italic">No donors found matching the criteria.</p>
         {% else %}
-            <p class="text-gray-500 italic">You have not posted any public requests yet.</p>
+            <p class="text-gray-500 italic">Enter search criteria above to find matching donors for direct contact.</p>
         {% endif %}
     </div>
+
+    <!-- Two-Column Dashboard View -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- 1. Submit Public Request Form & My Public Requests -->
+        <div class="p-6 rounded-xl border border-gray-200 bg-white shadow-md">
+            <h3 class="text-2xl font-semibold text-primary mb-4">Submit Public Blood Request</h3>
+            <p class="text-sm text-gray-600 mb-4">This request requires Admin approval before donors can see it.</p>
+
+            <form action="{{ url_for('submit_request') }}" method="POST" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label for="blood_type_needed" class="block text-sm font-medium text-gray-700">Blood Type Needed</label>
+                        <select name="blood_type_needed" id="blood_type_needed" class="w-full p-3 border rounded-md" required>
+                            <option value="O+">O+</option>
+                            <option value="O-">O-</option>
+                            <option value="A+">A+</option>
+                            <option value="A-">A-</option>
+                            <option value="B+">B+</option>
+                            <option value="B-">B-</option>
+                            <option value="AB+">AB+</option>
+                            <option value="AB-">AB-</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="contact_info" class="block text-sm font-medium text-gray-700">Contact Info (Phone/Email)</label>
+                        <input type="text" name="contact_info" id="contact_info" placeholder="Your best contact info" class="w-full p-3 border rounded-md" required>
+                    </div>
+                </div>
+                <div>
+                    <label for="location_needed" class="block text-sm font-medium text-gray-700">Location (Hospital/Area)</label>
+                    <input type="text" name="location_needed" id="location_needed" value="{{ current_user.location }}" placeholder="e.g., Cebu Doctors Hospital" class="w-full p-3 border rounded-md" required>
+                </div>
+                <textarea name="details" placeholder="Brief details on urgency or situation..." class="w-full p-3 border rounded-md" rows="3" required></textarea>
+                <button type="submit" class="bg-primary text-white py-2 px-4 rounded-lg hover:bg-red-700 transition duration-300 shadow-md">
+                    Post Request for Approval
+                </button>
+            </form>
+
+            <h4 class="text-xl font-semibold text-mid-blue mt-6 mb-3">My Public Requests Status</h4>
+            {% if my_requests %}
+                <div class="space-y-3 max-h-64 overflow-y-auto pr-2">
+                    {% for req in my_requests %}
+                        <div class="p-3 rounded-lg shadow-sm
+                            {% if req.status == 'Matched' %} bg-teal-50 border-l-4 border-teal-500
+                            {% elif req.status == 'Approved' %} bg-green-50 border-l-4 border-green-500
+                            {% elif req.status == 'Pending' %} bg-yellow-50 border-l-4 border-yellow-500
+                            {% else %} bg-gray-50 border-l-4 border-gray-500
+                            {% endif %}">
+                            <p class="font-bold text-sm">{{ req.blood_type_needed }} at {{ req.location_needed }}</p>
+                            <div class="flex justify-between items-start mt-1 flex-col sm:flex-row sm:items-center">
+                                <p class="text-xs font-semibold">Status: <span class="font-extrabold">{{ req.status | upper }}</span></p>
+
+                                {% if req.status == 'Matched' %}
+                                    <div class="mt-2 sm:mt-0">
+                                        <p class="text-xs text-teal-700 font-bold">MATCHED! Donor: {{ req.donor_username }} ({{ req.donor_location }})</p>
+                                        <form action="{{ url_for('complete_request', request_id=req.id) }}" method="POST" class="inline">
+                                            <button type="submit" class="text-xs text-mid-blue hover:underline font-bold ml-1">Mark as Completed</button>
+                                        </form>
+                                    </div>
+                                {% endif %}
+
+                                {% if req.status == 'Pending' or req.status == 'Approved' %}
+                                    <form action="{{ url_for('cancel_request', request_id=req.id) }}" method="POST">
+                                        <button type="submit" class="text-xs text-red-500 hover:underline">Cancel</button>
+                                    </form>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-gray-500 italic text-sm">You have not submitted any public requests yet.</p>
+            {% endif %}
+
+        </div>
+
+        <!-- 2. Latest Donor Posts Feed & My Direct Requests -->
+        <div class="p-6 rounded-xl border border-gray-200 bg-white shadow-md">
+            <h3 class="text-2xl font-semibold text-secondary mb-4">Latest Donor Success Stories</h3>
+            {% if recent_posts %}
+                <div class="space-y-4 max-h-64 overflow-y-auto pr-2">
+                    {% for post in recent_posts %}
+                        <div class="bg-gray-50 p-4 rounded-lg shadow border-l-4 border-secondary">
+                            <p class="font-semibold text-gray-800">{{ post.content }}</p>
+                            <p class="text-xs text-gray-500 mt-1">
+                                — Posted by **{{ post.username }}** {% if post.bank_name %} at {{ post.bank_name }} {% endif %}
+                                on {{ post.timestamp[:10] }}
+                            </p>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-gray-500 italic">No recent donation posts to display.</p>
+            {% endif %}
+
+             <h4 class="text-xl font-semibold text-mid-blue mt-6 mb-3">My Direct Requests (Transactions)</h4>
+            {% if my_transactions %}
+                <div class="space-y-3 max-h-64 overflow-y-auto pr-2">
+                    {% for tx in my_transactions %}
+                        <div class="bg-blue-50 p-3 rounded-lg shadow border-l-4 border-mid-blue">
+                            <p class="font-bold text-sm">To: {{ tx.donor_username }} (Needs {{ tx.blood_type_needed }})</p>
+                            <p class="text-xs text-gray-600">Needed at: {{ tx.location_needed }}</p>
+                            <p class="text-xs mt-1 font-semibold">Status: <span class="font-extrabold text-mid-blue">{{ tx.status | upper }}</span></p>
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p class="text-gray-500 italic text-sm">You have not sent any direct contact requests yet.</p>
+            {% endif %}
+
+        </div>
+    </div>
+
+
 </div>
+
+<!-- Hidden Modal for Message/Transaction Request -->
+<div id="requestModalOverlay" class="fixed inset-0 bg-black bg-opacity-50 hidden justify-center items-center z-50">
+    <div class="bg-white p-6 rounded-lg shadow-xl w-11/12 max-w-md">
+        <h3 class="text-xl font-bold mb-4 text-primary">Send Urgent Request to <span id="modalDonorName" class="text-secondary">Donor</span></h3>
+        <p class="mb-4 text-gray-600">You are requesting contact with this donor (Blood Type: <strong id="modalDonorType"></strong>). This is for situations where a public request is not appropriate.</p>
+
+        <form id="modalRequestForm" action="{{ url_for('send_transaction') }}" method="POST">
+            <input type="hidden" name="donor_id" id="modalDonorId">
+
+            {# Hidden inputs pull data from the current logged-in user (Recipient) #}
+            {% if current_user %}
+            <input type="hidden" name="blood_type_needed" value="{{ current_user.blood_type }}">
+            <input type="hidden" name="location_needed" value="{{ current_user.location }}">
+            {% endif %}
+
+            <textarea name="message" id="modalMessage" rows="5"
+                placeholder="Enter your urgent request and details (e.g., 'I need B+ urgently at Cebu Doctors'. Please call me at 0917...')" required
+                class="w-full p-2 mb-4 border rounded-lg"></textarea>
+
+            <div class="flex justify-end space-x-2">
+                <button type="button" class="py-2 px-4 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition" onclick="closeRequestModal()">Cancel</button>
+                <input type="submit" value="Send Request Now" class="py-2 px-4 bg-primary text-white rounded-lg hover:bg-red-600 cursor-pointer transition">
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function showRequestModal(donorId, donorName, donorType) {
+        document.getElementById('modalDonorId').value = donorId;
+        document.getElementById('modalDonorName').textContent = donorName;
+        document.getElementById('modalDonorType').textContent = donorType;
+        document.getElementById('modalMessage').value = '';
+        document.getElementById('requestModalOverlay').classList.remove('hidden');
+        document.getElementById('requestModalOverlay').classList.add('flex');
+    }
+
+    function closeRequestModal() {
+        document.getElementById('requestModalOverlay').classList.add('hidden');
+        document.getElementById('requestModalOverlay').classList.remove('flex');
+    }
+
+    document.getElementById('requestModalOverlay').addEventListener('click', function(e) {
+        if (e.target.id === 'requestModalOverlay') {
+            closeRequestModal();
+        }
+    });
+</script>
 {% endblock %}
