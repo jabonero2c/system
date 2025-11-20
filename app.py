@@ -4,31 +4,24 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from datetime import datetime
 import os
 
-# --- Configuration and Initialization ---
 app = Flask(__name__)
-# Setting the secret key is essential for sessions and flash messages
 app.secret_key = secrets.token_hex(24)
-# Ensure the instance directory exists for the database
 if not os.path.exists('instance'):
     os.makedirs('instance')
 DATABASE = 'instance/savebloodon.db'
 
 
-# --- Database Setup and Helpers ---
 
 def get_db():
-    """Connects to the specific database."""
     db = getattr(g, '_database', None)
     if db is None:
         db = g._database = sqlite3.connect(DATABASE)
-        # Configure to return row objects that behave like dicts
         db.row_factory = sqlite3.Row
     return db
 
 
 @app.teardown_appcontext
 def close_connection(exception):
-    """Closes the database connection at the end of the request."""
     db = getattr(g, '_database', None)
     if db is not None:
         db.close()
