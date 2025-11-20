@@ -1,20 +1,38 @@
-import sqlite3
+import sqlite3 # FIX: Added missing import
 import secrets
+import hashlib
 from flask import Flask, render_template, request, redirect, url_for, session, flash, g
 from datetime import datetime
 import os
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(24)
+
+# Ensure the instance directory exists
 if not os.path.exists('instance'):
     os.makedirs('instance')
-DATABASE = 'instance/savebloodon.db'
+
+DATABASE = 'instance/test_blood.db'
 
 
+# --- SECURITY HELPERS ---
+
+def hash_password(password):
+    """Hashes a password using SHA-256 for basic security."""
+    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+
+
+def check_password(hashed_password, provided_password):
+    """Checks a provided plain password against a hashed one."""
+    return hashed_password == hash_password(provided_password)
+
+
+# -----------------------------------------------------------
 
 def get_db():
     db = getattr(g, '_database', None)
     if db is None:
+        # FIX: sqlite3 is now imported and accessible
         db = g._database = sqlite3.connect(DATABASE)
         db.row_factory = sqlite3.Row
     return db
@@ -44,8 +62,14 @@ def execute_db(query, args=()):
 
 def add_mock_blood_bank():
     """Inserts a mock blood bank if none exist."""
-    count = query_db('SELECT COUNT(*) FROM blood_banks', one=True)['COUNT(*)']
+    # Use execute to get a simple count without relying on the row_factory key name
+    db = get_db()
+    cursor = db.cursor()
+    count_row = cursor.execute('SELECT COUNT(*) FROM blood_banks').fetchone()
+    count = count_row[0] if count_row else 0
+
     if count == 0:
+        print("Inserting mock blood banks...")
         execute_db(
             "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
             ('Philippine Red Cross - Cebu Chapter', 'Cebu City')
@@ -54,7 +78,6 @@ def add_mock_blood_bank():
             "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
             ('Perpetual Succour Hospital Blood Bank', 'Lahug, Cebu')
         )
-        # --- NEW CEBU HOSPITALS/BLOOD BANKS ---
         execute_db(
             "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
             ('Cebu Doctors\' University Hospital', 'Cebu City')
@@ -67,22 +90,25 @@ def add_mock_blood_bank():
             "INSERT INTO blood_banks (name, location) VALUES (?, ?)",
             ('Vicente Sotto Memorial Medical Center', 'Cebu City')
         )
-        # --- END NEW CEBU HOSPITALS/BLOOD BANKS ---
 
 
 # --- Automatic Database Initialization ---
 
 def init_db_on_startup():
-    """Creates tables if they do not exist and inserts initial mock data."""
+    """
+    Creates tables if they do not exist and inserts initial mock data.
+    """
     db = get_db()
     cursor = db.cursor()
 
-    # Create Tables
+    # Create Tables (using IF NOT EXISTS to prevent dropping existing data)
+
+    # FIX: Changed 'password' column to 'password_hash' for security
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
+            password_hash TEXT NOT NULL,
             blood_type TEXT NOT NULL,
             location TEXT NOT NULL,
             role TEXT NOT NULL CHECK (role IN ('donor', 'recipient', 'admin'))
@@ -144,47 +170,52 @@ def init_db_on_startup():
     # Add blood banks before checking users
     add_mock_blood_bank()
 
-    # Insert Mock Data (Only if the 'admin' user does not exist)
-    admin_check = cursor.execute("SELECT id FROM users WHERE username='admin'").fetchone()
+    # Insert Mock Data (Only if NO users exist)
+    user_count_result = cursor.execute("SELECT COUNT(*) FROM users").fetchone()
+    user_count = user_count_result[0] if user_count_result else 0
 
-    if not admin_check:
+    if user_count == 0:
         print("Inserting initial mock data...")
 
-        # Mock Users (DonorO_Plus gets a pending direct request)
+        # Hash passwords for mock data insertion
         users_data = [
-            ('admin', 'password', 'AB+', 'Central City', 'admin'),
-            ('DonorO_Plus', 'password', 'O+', 'Lahug, Cebu City', 'donor'),
-            ('DonorA_Minus', 'password', 'A-', 'Mandaue City', 'donor'),
-            ('RecipientB_Plus', 'password', 'B+', 'Central City', 'recipient'),
+            ('admin', hash_password('password'), 'AB+', 'Central City', 'admin'),
+            ('DonorO_Plus', hash_password('password'), 'O+', 'Lahug, Cebu City', 'donor'),
+            ('DonorA_Minus', hash_password('password'), 'A-', 'Mandaue City', 'donor'),
+            ('RecipientB_Plus', hash_password('password'), 'B+', 'Central City', 'recipient'),
         ]
-        cursor.executemany("INSERT INTO users (username, password, blood_type, location, role) VALUES (?, ?, ?, ?, ?)",
-                           users_data)
+        # FIX: Updated column list to include password_hash
+        cursor.executemany(
+            "INSERT INTO users (username, password_hash, blood_type, location, role) VALUES (?, ?, ?, ?, ?)",
+            users_data)
 
         # Get necessary IDs
-        donor_o_plus_id = cursor.execute("SELECT id FROM users WHERE username='DonorO_Plus'").fetchone()[0]
-        recipient_b_plus_id = cursor.execute("SELECT id FROM users WHERE username='RecipientB_Plus'").fetchone()[0]
+        donor_o_plus_row = cursor.execute("SELECT id FROM users WHERE username='DonorO_Plus'").fetchone()
+        recipient_b_plus_row = cursor.execute("SELECT id FROM users WHERE username='RecipientB_Plus'").fetchone()
 
-        # Mock Requests
-        # Request 1: Pending Admin Approval (Admin Notification Trigger)
-        cursor.execute(
-            "INSERT INTO requests (requester_id, blood_type_needed, location_needed, contact_info, details, status) VALUES (?, ?, ?, ?, ?, ?)",
-            (recipient_b_plus_id, 'A+', 'Central City Hospital', '0917-1234567',
-             'Need A+ for scheduled surgery.', 'Pending')
-        )
-        # Request 2: Approved and Visible to Donors
-        cursor.execute(
-            "INSERT INTO requests (requester_id, blood_type_needed, location_needed, contact_info, details, status) VALUES (?, ?, ?, ?, ?, ?)",
-            (recipient_b_plus_id, 'O-', 'Mandaue Hospital', '0917-0001111',
-             'Urgent O- need.', 'Approved')
-        )
+        if donor_o_plus_row and recipient_b_plus_row:
+            donor_o_plus_id = donor_o_plus_row[0]
+            recipient_b_plus_id = recipient_b_plus_row[0]
 
-        # Mock Transaction (Donor Notification Trigger for DonorO_Plus)
-        cursor.execute(
-            "INSERT INTO transactions (requester_id, donor_id, blood_type_needed, location_needed, message, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (recipient_b_plus_id, donor_o_plus_id, 'O+', 'Cebu Doctors',
-             'Can you please donate O+? You were a suggested donor.',
-             datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Pending')
-        )
+            # Mock Requests
+            cursor.execute(
+                "INSERT INTO requests (requester_id, blood_type_needed, location_needed, contact_info, details, status) VALUES (?, ?, ?, ?, ?, ?)",
+                (recipient_b_plus_id, 'A+', 'Central City Hospital', '0917-1234567',
+                 'Need A+ for scheduled surgery.', 'Pending')
+            )
+            cursor.execute(
+                "INSERT INTO requests (requester_id, blood_type_needed, location_needed, contact_info, details, status) VALUES (?, ?, ?, ?, ?, ?)",
+                (recipient_b_plus_id, 'O-', 'Mandaue Hospital', '0917-0001111',
+                 'Urgent O- need.', 'Approved')
+            )
+
+            # Mock Transaction
+            cursor.execute(
+                "INSERT INTO transactions (requester_id, donor_id, blood_type_needed, location_needed, message, timestamp, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (recipient_b_plus_id, donor_o_plus_id, 'O+', 'Cebu Doctors',
+                 'Can you please donate O+? You were a suggested donor.',
+                 datetime.now().strftime('%Y-%m-%d %H:%M:%S'), 'Pending')
+            )
 
         db.commit()
         print("Database structure and initial data confirmed.")
@@ -277,14 +308,19 @@ def auth_page():
 def login():
     if request.method == 'POST':
         username = request.form['username']
-        password = request.form['password']
-        user = query_db('SELECT * FROM users WHERE username = ? AND password = ?', (username, password), one=True)
-        if user:
+        password = request.form['password']  # This is the plain password
+
+        # FIX: Query only by username
+        user = query_db('SELECT * FROM users WHERE username = ?', (username,), one=True)
+
+        # FIX: Check provided password against the stored hash
+        if user and check_password(user['password_hash'], password):
             session['user_id'] = user['id']
             flash(f'Logged in successfully as {user["username"]} ({user["role"]}).', 'success')
             return redirect(url_for('dashboard'))
         else:
             flash('Invalid username or password.', 'error')
+            # Pass flag to show login form if authentication failed
             return render_template('auth.html', error='Invalid username or password.', show_login=True)
     return redirect(url_for('auth_page'))
 
@@ -297,15 +333,24 @@ def register():
         blood_type = request.form['blood_type']
         location = request.form['location']
         role = request.form['role']
+
+        # Check if username already exists
         existing_user = query_db('SELECT * FROM users WHERE username = ?', (new_username,), one=True)
         if existing_user:
             flash('Username already taken.', 'error')
+            # Pass flag to show register form if validation failed
             return render_template('auth.html', error='Username already taken.', show_register=True)
 
+        # FIX: Hash the password before insertion
+        hashed_password = hash_password(new_password)
+
+        # FIX: Insert into the password_hash column
         execute_db(
-            'INSERT INTO users (username, password, blood_type, location, role) VALUES (?, ?, ?, ?, ?)',
-            (new_username, new_password, blood_type, location, role)
+            'INSERT INTO users (username, password_hash, blood_type, location, role) VALUES (?, ?, ?, ?, ?)',
+            (new_username, hashed_password, blood_type, location, role)
         )
+
+        # Retrieve the newly created user to get the ID
         new_user = query_db('SELECT * FROM users WHERE username = ?', (new_username,), one=True)
         session['user_id'] = new_user['id']
 
@@ -340,7 +385,7 @@ def dashboard():
         return redirect(url_for('logout'))
 
 
-# --- Donor Post Story Route (NEW FIX) ---
+# --- Donor Post Story Route ---
 
 @app.route('/post_story', methods=['POST'])
 def post_story():
@@ -357,6 +402,13 @@ def post_story():
     # Convert empty string from select input to None for the database
     if blood_bank_id == '':
         blood_bank_id = None
+    else:
+        # Ensure it's converted to an integer if it's not None
+        try:
+            blood_bank_id = int(blood_bank_id)
+        except ValueError:
+            flash('Invalid blood bank selection.', 'error')
+            return redirect(url_for('dashboard'))
 
     try:
         execute_db(
@@ -500,6 +552,52 @@ def submit_request():
 
     flash('Public blood request submitted for admin approval.', 'success')
     return redirect(url_for('search_donors'))
+
+
+# --- Donor Action Routes ---
+
+@app.route('/donor/accept_transaction/<int:transaction_id>', methods=['POST'])
+def donor_accept_transaction(transaction_id):
+    user = get_current_user()
+    if not user or user['role'] != 'donor':
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
+
+    # Check if the transaction belongs to the current donor and is pending
+    transaction = query_db(
+        'SELECT * FROM transactions WHERE id = ? AND donor_id = ? AND status = ?',
+        (transaction_id, user['id'], 'Pending'), one=True
+    )
+
+    if transaction:
+        execute_db('UPDATE transactions SET status = ? WHERE id = ?', ('Completed', transaction_id))
+        flash(f'Transaction #{transaction_id} marked as accepted/completed. Thank you for your generosity!', 'success')
+    else:
+        flash('Transaction not found or invalid status.', 'error')
+
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/donor/decline_transaction/<int:transaction_id>', methods=['POST'])
+def donor_decline_transaction(transaction_id):
+    user = get_current_user()
+    if not user or user['role'] != 'donor':
+        flash('Permission denied.', 'error')
+        return redirect(url_for('dashboard'))
+
+    # Check if the transaction belongs to the current donor and is pending
+    transaction = query_db(
+        'SELECT * FROM transactions WHERE id = ? AND donor_id = ? AND status = ?',
+        (transaction_id, user['id'], 'Pending'), one=True
+    )
+
+    if transaction:
+        execute_db('UPDATE transactions SET status = ? WHERE id = ?', ('Cancelled', transaction_id))
+        flash(f'Transaction #{transaction_id} marked as cancelled.', 'warning')
+    else:
+        flash('Transaction not found or invalid status.', 'error')
+
+    return redirect(url_for('dashboard'))
 
 
 # --- Admin Approval Routes ---
